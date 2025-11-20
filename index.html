@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>家用點數任務板</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f7; }
+
+    /* 讓整體字大一點，適合小孩手指 + 視力 */
+    body { font-size: 18px; }
+
+    .app {
+      max-width: 480px;
+      margin: 16px auto;
+      background: white;
+      border-radius: 24px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.12);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 88vh;
+    }
+
+    /* 男孩 / 女孩 主題色 */
+    .app.boy header {
+      background: linear-gradient(135deg,#4f8cf7,#7ab8ff);
+    }
+    .app.girl header {
+      background: linear-gradient(135deg,#ff7eb3,#ff9a9e);
+    }
+
+    header {
+      color: white;
+      padding: 18px 18px 14px;
+    }
+    .header-top { display:flex; justify-content:space-between; align-items:center; }
+    .kid-main { display:flex; align-items:center; gap:10px; }
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #ffdd66;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight: 700;
+      font-size: 22px;
+    }
+    .kid-name { font-size: 22px; font-weight: 700; }
+    .kid-sub { font-size: 14px; opacity: 0.95; }
+    .switch-btn {
+      border: none;
+      background: rgba(255,255,255,0.25);
+      color: white;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .header-bottom {
+      margin-top: 12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap: 8px;
+    }
+    .date-chip {
+      background: rgba(255,255,255,0.2);
+      padding: 6px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+      font-size: 14px;
+    }
+    .total-points {
+      font-size: 26px;
+      font-weight: 800;
+      display:flex;
+      align-items:center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    main {
+      padding: 10px 16px 12px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    h2 {
+      font-size: 18px;
+      margin: 10px 0 6px;
+    }
+    .card {
+      background:#fff;
+      border-radius:16px;
+      padding:14px;
+      margin-bottom:12px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    /* Firebase 同步狀態列 */
+    .sync-bar {
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .sync-bar.synced {
+      background:#e8f5e9;
+      color:#2e7d32;
+    }
+    .sync-bar.syncing {
+      background:#fff8e1;
+      color:#f57f17;
+    }
+    .sync-bar.error {
+      background:#ffebee;
+      color:#c62828;
+    }
+
+    /* 週任務表 */
+    .week-wrapper {
+      overflow-x:auto;
+      padding-bottom: 6px;
+    }
+    .week-grid {
+      display:flex;
+      gap: 10px;
+      min-width: 620px; /* 讓手機可以左右拖動 */
+    }
+    .day-col {
+      background:#fff;
+      border-radius:16px;
+      padding: 10px;
+      min-width: 120px;
+      box-shadow:0 2px 4px rgba(0,0,0,0.04);
+    }
+    .day-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-align:center;
+    }
+    .day-task-row {
+      display:flex;
+      align-items:center;
+      gap: 6px;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .day-task-row input {
+      width: 22px;
+      height: 22px;
+    }
+        .day-task-label {
+      flex: 1;
+      line-height: 1.2;
+    }
+    .day-summary {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed #eee;
+      font-size: 13px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      color:#555;
+    }
+    .day-summary-value-positive {
+      color:#2e7d32;
+      font-weight:600;
+    }
+    .day-summary-value-negative {
+      color:#c62828;
+      font-weight:600;
+    }
+
+    textarea {
+      width: 100%;
+      border: none;
+      resize: none;
+      min-height: 70px;
+      font-family: inherit;
+      font-size: 15px;
+      outline: none;
+    }
+
+    /* Rewards */
+    .reward-card { border-left: 5px solid #ffb74d; padding-left: 10px; }
+    .reward-title { font-size: 16px; font-weight: 600; }
+    .reward-points { font-size: 16px; color:#ff9800; margin-top:2px; font-weight:700; }
+    .reward-desc { font-size: 14px; color:#666; margin-top:2px; }
+    .reward-tags { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
+    .tag { font-size: 12px; background:#f1f3f4; padding:3px 8px; border-radius:999px; }
+
+    /* History */
+    .history-item { display:flex; justify-content:space-between; margin-bottom:10px; font-size: 15px; }
+    .history-main { max-width: 70%; }
+    .history-date { font-size: 13px; color:#888; }
+    .history-delta { font-weight: 600; font-size: 16px; }
+
+    /* Settings */
+    .settings-group { margin-bottom: 16px; }
+    .settings-item {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 0;
+      border-bottom:1px solid #eee;
+      font-size: 15px;
+    }
+    .settings-label { font-weight: 600; }
+    .settings-sub { font-size: 13px; color:#777; margin-top:2px; }
+    .settings-btn {
+      border-radius:999px;
+      border:1px solid #ddd;
+      background:#fafafa;
+      padding:6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Quick points */
+    .quick-row { display:flex; gap:10px; margin-top:6px; }
+    .pill-btn {
+      flex:1;
+      border-radius:999px;
+      border:none;
+      padding:8px 4px;
+      font-size:15px;
+      cursor:pointer;
+    }
+    .pill-plus { background:#e3f2fd; color:#1565c0; }
+    .pill-minus { background:#ffebee; color:#c62828; }
+    .small-label { font-size: 13px; color:#777; margin-top:6px; }
+    .small-input {
+      width:100%;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid #ddd;
+      margin-top:4px;
+      font-size: 15px;
+    }
+
+    /* Tabs content */
+    .tab-page { display:none; }
+    .tab-page.active { display:block; }
+
+    /* Bottom nav */
+    nav {
+      display:flex;
+      justify-content:space-around;
+      border-top:1px solid #ddd;
+      background:#fff;
+    }
+    .nav-item {
+      flex:1;
+      text-align:center;
+      padding:10px 0 12px;
+      font-size: 14px;
+      cursor:pointer;
+      color:#777;
+    }
+    .nav-icon { display:block; font-size: 20px; margin-bottom:2px; }
+    .nav-item.active { color:#3366cc; font-weight:600; }
+  </style>
+</head>
+<body>
+  <!-- 預設先用 boy 主題，之後可由程式切換 girl -->
+  <div class="app boy">
+    <header>
+      <div class="header-top">
+        <div class="kid-main">
+          <div class="avatar">L</div>
+          <div>
+            <div class="kid-name">Leo</div>
+            <div class="kid-sub">今天一起加油 💪</div>
+          </div>
+        </div>
+        <button class="switch-btn" type="button">切換小孩 ▾</button>
+      </div>
+      <div class="header-bottom">
+        <div class="date-chip" id="date-chip">本週：11 / 18 ～ 11 / 24</div>
+        <div class="total-points" id="total-points">
+          <span>⭐</span>
+          <span>32 點</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Firebase 同步狀態列（之後可依 Firebase 實際狀態切換 class） -->
+      <div class="sync-bar synced" id="sync-bar" data-status="synced">
+        ✅ 已同步到雲端（Firebase）
+      </div>
+
+      <!-- 今天 / 本週 Tab -->
+      <section class="tab-page active" data-tab="today">
+        <h2>本週任務表</h2>
+        <div class="week-wrapper">
+          <div class="week-grid">
+            <div class="day-col">
+              <div class="day-title">一</div>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">自己穿好衣服</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">寫完回家作業</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">睡前收玩具</span>
+              </label>
+              <div class="day-summary">
+                <span>本日小計</span>
+                <span class="day-summary-value-positive">+3 點</span>
+              </div>
+            </div>
+
+            <div class="day-col">
+              <div class="day-title">二</div>
+              <label class="day-task-row">
+                <input type="checkbox" checked />
+                <span class="day-task-label">自己穿好衣服</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">寫完回家作業</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">睡前收玩具</span>
+              </label>
+              <div class="day-summary">
+                <span>本日小計</span>
+                <span class="day-summary-value-positive">+1 點</span>
+              </div>
+            </div>
+
+            <div class="day-col">
+              <div class="day-title">三</div>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">自己穿好衣服</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" checked />
+                <span class="day-task-label">寫完回家作業</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">睡前收玩具</span>
+              </label>
+              <div class="day-summary">
+                <span>本日小計</span>
+                <span class="day-summary-value-positive">+2 點</span>
+              </div>
+            </div>
+
+            <div class="day-col">
+              <div class="day-title">四</div>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">自己穿好衣服</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">寫完回家作業</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">睡前收玩具</span>
+              </label>
+              <div class="day-summary">
+                <span>本日小計</span>
+                <span class="day-summary-value-positive">+0 點</span>
+              </div>
+            </div>
+
+            <div class="day-col">
+              <div class="day-title">五</div>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">自己穿好衣服</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">寫完回家作業</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">睡前收玩具</span>
+              </label>
+              <div class="day-summary">
+                <span>本日小計</span>
+                <span class="day-summary-value-positive">+0 點</span>
+              </div>
+            </div>
+
+            <div class="day-col">
+              <div class="day-title">六</div>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">自己穿好衣服</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">寫完回家作業</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">睡前收玩具</span>
+              </label>
+              <div class="day-summary">
+                <span>本日小計</span>
+                <span class="day-summary-value-positive">+0 點</span>
+              </div>
+            </div>
+
+            <div class="day-col">
+              <div class="day-title">日</div>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">自己穿好衣服</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">寫完回家作業</span>
+              </label>
+              <label class="day-task-row">
+                <input type="checkbox" />
+                <span class="day-task-label">睡前收玩具</span>
+              </label>
+              <div class="day-summary">
+                <span>本日小計</span>
+                <span class="day-summary-value-positive">+0 點</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <h2>快速加 / 扣點（爸媽）</h2>
+        <div class="card">
+          <div class="small-label">臨時加點（特別貼心、額外努力）</div>
+          <div class="quick-row">
+            <button class="pill-btn pill-plus" type="button">+1 點</button>
+            <button class="pill-btn pill-plus" type="button">+3 點</button>
+            <button class="pill-btn pill-plus" type="button">+5 點</button>
+          </div>
+          <div class="small-label">扣點（謹慎使用）</div>
+          <div class="quick-row">
+            <button class="pill-btn pill-minus" type="button">-1 點</button>
+            <button class="pill-btn pill-minus" type="button">-3 點</button>
+          </div>
+          <div class="small-label">備註（選填，記錄原因）</div>
+          <input class="small-input" placeholder="例：晚餐時一直打擾妹妹 -1 點（示意）" />
+        </div>
+      </section>
+
+      <!-- 獎勵 Tab -->
+      <section class="tab-page" data-tab="rewards">
+        <h2>點數兌換</h2>
+        <div class="card">
+          <div style="font-size:16px; margin-bottom:4px;">
+            目前小孩：<strong><span id="redeem-kid-name">Leo</span></strong>
+          </div>
+          <div style="font-size:15px;">
+            可用總點數：<span id="redeem-kid-points" style="font-size:22px;font-weight:800;">32</span> 點
+          </div>
+          <div style="font-size:13px;color:#777;margin-top:6px;">
+            （這裡顯示的是目前這位小孩的總點數，兌換時會從這裡扣除）
+          </div>
+        </div>
+
+        <h2>輸入兌換內容</h2>
+        <div class="card">
+          <div class="small-label">兌換名稱</div>
+          <input class="small-input" placeholder="例：去看火車、換一個玩具、多看 10 分鐘卡通……" />
+
+          <div class="small-label">扣除點數</div>
+          <input class="small-input" placeholder="例：20" />
+
+          <div class="small-label">備註（選填，說明或限制條件）</div>
+          <input class="small-input" placeholder="例：假日限定、需要爸媽先同意（示意）" />
+
+          <div class="quick-row" style="margin-top:10px;">
+            <button class="pill-btn pill-minus" type="button">確認兌換（示意，尚未連接扣點功能）</button>
+          </div>
+
+          <div class="small-label" style="margin-top:8px;">
+            之後實作時：按下「確認兌換」會從 Firebase 讀取目前點數 → 扣除 → 寫回，並新增一筆兌換紀錄。
+          </div>
+        </div>
+
+        <h2>最近一次兌換（示意）</h2>
+        <div class="card">
+          <div class="history-item">
+            <div class="history-main">
+              <div>-20 點：去看火車</div>
+              <div class="history-date">2025 / 11 / 23 下午 · 由爸媽確認</div>
+            </div>
+            <div class="history-delta" style="color:#c62828;">-20</div>
+          </div>
+          <div style="font-size:13px;color:#777;">（未來會從 Firebase 讀出多筆兌換紀錄）</div>
+        </div>
+      </section>
+
+      <!-- 紀錄 Tab -->
+      <section class="tab-page" data-tab="history">
+        <h2>近期點數紀錄</h2>
+        <div class="card">
+          <div class="history-item">
+            <div class="history-main">
+              <div>+2 點：寫完回家作業</div>
+              <div class="history-date">2025 / 11 / 19 晚上</div>
+            </div>
+            <div class="history-delta" style="color:#4caf50;">+2</div>
+          </div>
+          <div class="history-item">
+            <div class="history-main">
+              <div>-1 點：晚餐時吵鬧不聽提醒</div>
+              <div class="history-date">2025 / 11 / 19 晚上</div>
+            </div>
+            <div class="history-delta" style="color:#c62828;">-1</div>
+          </div>
+          <div class="history-item">
+            <div class="history-main">
+              <div>+3 點：主動幫忙收拾客廳</div>
+              <div class="history-date">2025 / 11 / 18 下午</div>
+            </div>
+            <div class="history-delta" style="color:#4caf50;">+3</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 設定 Tab -->
+      <section class="tab-page" data-tab="settings">
+        <h2>小孩管理</h2>
+        <div class="card settings-group">
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">Leo</div>
+              <div class="settings-sub">代表顏色：藍色 · 總點數 32</div>
+            </div>
+            <button class="settings-btn" type="button">編輯</button>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">Natasha</div>
+              <div class="settings-sub">代表顏色：粉色 · 總點數 18</div>
+            </div>
+            <button class="settings-btn" type="button">編輯</button>
+          </div>
+        </div>
+
+        <h2>任務管理（示意）</h2>
+        <div class="card settings-group">
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">早上自己穿好衣服</div>
+              <div class="settings-sub">+1 點 · 每天</div>
+            </div>
+            <button class="settings-btn" type="button">設定</button>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">寫完回家作業</div>
+              <div class="settings-sub">+2 點 · 平日</div>
+            </div>
+            <button class="settings-btn" type="button">設定</button>
+          </div>
+        </div>
+
+        <h2>獎勵管理（示意）</h2>
+        <div class="card settings-group">
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">去看火車</div>
+              <div class="settings-sub">15 點 · 假日限定</div>
+            </div>
+            <button class="settings-btn" type="button">設定</button>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">去湯姆熊</div>
+              <div class="settings-sub">25 點 · 週末限定</div>
+            </div>
+            <button class="settings-btn" type="button">設定</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav>
+      <div class="nav-item active" data-tab-target="today">
+        <span class="nav-icon">📅</span>
+        本週
+      </div>
+      <div class="nav-item" data-tab-target="rewards">
+        <span class="nav-icon">🎁</span>
+        兌換
+      </div>
+      <div class="nav-item" data-tab-target="history">
+        <span class="nav-icon">📜</span>
+        紀錄
+      </div>
+      <div class="nav-item" data-tab-target="settings">
+        <span class="nav-icon">⚙️</span>
+        設定
+      </div>
+    </nav>
+  </div>
+
+  <script>
+    // 簡單頁籤切換（純前端示意）
+    const navItems = document.querySelectorAll('.nav-item');
+    const pages = document.querySelectorAll('.tab-page');
+
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const target = item.getAttribute('data-tab-target');
+
+        navItems.forEach(n => n.classList.remove('active'));
+        item.classList.add('active');
+
+        pages.forEach(page => {
+          if (page.getAttribute('data-tab') === target) {
+            page.classList.add('active');
+          } else {
+            page.classList.remove('active');
+          }
+        });
+      });
+    });
+
+    // 簡單切換小孩主題（示意）：在 Leo / Natasha 之間切換
+    const app = document.querySelector('.app');
+    const switchBtn = document.querySelector('.switch-btn');
+    const kidNameEl = document.querySelector('.kid-name');
+    const avatarEl = document.querySelector('.avatar');
+    const kidSubEl = document.querySelector('.kid-sub');
+    const totalPointsEl = document.getElementById('total-points');
+
+    let currentKid = 'leo';
+
+    switchBtn.addEventListener('click', () => {
+      if (currentKid === 'leo') {
+        currentKid = 'natasha';
+        app.classList.remove('boy');
+        app.classList.add('girl');
+        kidNameEl.textContent = 'Natasha';
+        avatarEl.textContent = 'N';
+        kidSubEl.textContent = '一起開心玩耍 🌈';
+        totalPointsEl.innerHTML = '<span>⭐</span><span>18 點</span>';
+      } else {
+        currentKid = 'leo';
+        app.classList.remove('girl');
+        app.classList.add('boy');
+        kidNameEl.textContent = 'Leo';
+        avatarEl.textContent = 'L';
+        kidSubEl.textContent = '今天一起加油 💪';
+        totalPointsEl.innerHTML = '<span>⭐</span><span>32 點</span>';
+      }
+    });
+
+    // Firebase 同步狀態未接 Firebase 前，先示意：
+    // const syncBar = document.getElementById('sync-bar');
+    // syncBar.dataset.status = 'syncing';
+    // syncBar.className = 'sync-bar syncing';
+    // syncBar.textContent = '⏳ 正在同步到雲端…';
+  </script>
+</body>
+</html>
