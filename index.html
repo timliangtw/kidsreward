@@ -353,12 +353,14 @@
         </div>
 
         <h2>快速加 / 扣點（爸媽）</h2>
-        <div class="card">
-          <div class="small-label">調整總點數（簡單版）</div>
+        <div class="card" id="quick-points-card">
+          <div class="small-label">調整今天的點數（也會影響總點數）</div>
           <div class="quick-row">
             <button class="pill-btn pill-plus" type="button">+1 點</button>
             <button class="pill-btn pill-minus" type="button">-1 點</button>
           </div>
+          <div class="small-label">備註（選填，記錄原因）</div>
+          <input class="small-input" id="quick-note-input" placeholder="例：今天主動幫忙收玩具 +1 點" />
         </div>
       </section>
 
@@ -413,7 +415,7 @@
       <!-- 紀錄 Tab -->
       <section class="tab-page" data-tab="history">
         <h2>近期點數紀錄</h2>
-        <div class="card">
+        <div class="card" id="points-history-card">
           <div class="history-item">
             <div class="history-main">
               <div>+2 點：寫完回家作業</div>
@@ -546,19 +548,19 @@
     </nav>
   </div>
 
-  <script>
+    <script>
     // ===== 簡單頁籤切換 =====
-    const navItems = document.querySelectorAll('.nav-item');
-    const pages = document.querySelectorAll('.tab-page');
+    var navItems = document.querySelectorAll('.nav-item');
+    var pages = document.querySelectorAll('.tab-page');
 
-    navItems.forEach(item => {
-      item.addEventListener('click', () => {
-        const target = item.getAttribute('data-tab-target');
+    navItems.forEach(function(item) {
+      item.addEventListener('click', function() {
+        var target = item.getAttribute('data-tab-target');
 
-        navItems.forEach(n => n.classList.remove('active'));
+        navItems.forEach(function(n) { n.classList.remove('active'); });
         item.classList.add('active');
 
-        pages.forEach(page => {
+        pages.forEach(function(page) {
           if (page.getAttribute('data-tab') === target) {
             page.classList.add('active');
           } else {
@@ -568,41 +570,76 @@
       });
     });
 
-    // ===== 小孩切換主題（示意） =====
-    const appEl = document.querySelector('.app');
-    const switchBtn = document.querySelector('.switch-btn');
-    const kidNameEl = document.querySelector('.kid-name');
-    const avatarEl = document.querySelector('.avatar');
-    const kidSubEl = document.querySelector('.kid-sub');
-    const totalPointsEl = document.getElementById('total-points');
-
-    let currentKid = 'leo';
-
-    switchBtn.addEventListener('click', () => {
-      if (currentKid === 'leo') {
-        currentKid = 'natasha';
-        appEl.classList.remove('boy');
-        appEl.classList.add('girl');
-        kidNameEl.textContent = 'Natasha';
-        avatarEl.textContent = 'N';
-        kidSubEl.textContent = '一起開心玩耍 🌈';
-        totalPointsEl.innerHTML = '<span>⭐</span><span>18 點</span>';
-      } else {
-        currentKid = 'leo';
-        appEl.classList.remove('girl');
-        appEl.classList.add('boy');
-        kidNameEl.textContent = 'Leo';
-        avatarEl.textContent = 'L';
-        kidSubEl.textContent = '今天一起加油 💪';
-        totalPointsEl.innerHTML = '<span>⭐</span><span>32 點</span>';
+    // ===== 狀態定義（兩個小孩的總點數） =====
+    var kidsState = {
+      leo: {
+        key: 'leo',
+        displayName: 'Leo',
+        avatar: 'L',
+        slogan: '今天一起加油 💪',
+        theme: 'boy',
+        totalPoints: 32
+      },
+      natasha: {
+        key: 'natasha',
+        displayName: 'Natasha',
+        avatar: 'N',
+        slogan: '一起開心玩耍 🌈',
+        theme: 'girl',
+        totalPoints: 18
       }
-    });
+    };
 
-    // ===== 自動標記今天是星期幾 & 捲動到該欄位 =====
-    function highlightTodayColumn() {
-      const today = new Date();
-      const jsDay = today.getDay(); // 0=Sun,1=Mon,...6=Sat
-      let colIndex;
+    var currentKid = 'leo';
+
+    // ===== DOM 參照 =====
+    var appEl = document.querySelector('.app');
+    var switchBtn = document.querySelector('.switch-btn');
+    var kidNameEl = document.querySelector('.kid-name');
+    var avatarEl = document.querySelector('.avatar');
+    var kidSubEl = document.querySelector('.kid-sub');
+    var totalPointsEl = document.getElementById('total-points');
+
+    var redeemKidNameEl = document.getElementById('redeem-kid-name');
+    var redeemKidPointsEl = document.getElementById('redeem-kid-points');
+
+    var quickPlusBtn = document.querySelector('#quick-points-card .pill-plus');
+    var quickMinusBtn = document.querySelector('#quick-points-card .pill-minus');
+    var quickNoteInput = document.getElementById('quick-note-input');
+
+    var historyCard = document.getElementById('points-history-card');
+
+    // ===== 小孩切換 + header / 兌換區渲染 =====
+    function renderCurrentKid() {
+      var kid = kidsState[currentKid];
+      kidNameEl.textContent = kid.displayName;
+      avatarEl.textContent = kid.avatar;
+      kidSubEl.textContent = kid.slogan;
+
+      appEl.classList.toggle('boy', kid.theme === 'boy');
+      appEl.classList.toggle('girl', kid.theme === 'girl');
+
+      if (totalPointsEl) {
+        totalPointsEl.innerHTML = '<span>⭐</span><span>' + kid.totalPoints + ' 點</span>';
+      }
+      if (redeemKidNameEl && redeemKidPointsEl) {
+        redeemKidNameEl.textContent = kid.displayName;
+        redeemKidPointsEl.textContent = kid.totalPoints;
+      }
+    }
+
+    if (switchBtn) {
+      switchBtn.addEventListener('click', function() {
+        currentKid = currentKid === 'leo' ? 'natasha' : 'leo';
+        renderCurrentKid();
+      });
+    }
+
+    // ===== 計算今天是星期幾（對應欄位 index） =====
+    function getTodayColumnIndex() {
+      var today = new Date();
+      var jsDay = today.getDay(); // 0=Sun,1=Mon,...6=Sat
+      var colIndex;
       switch (jsDay) {
         case 0: colIndex = 6; break; // 日
         case 1: colIndex = 0; break; // 一
@@ -613,26 +650,138 @@
         case 6: colIndex = 5; break; // 六
         default: colIndex = 0;
       }
+      return colIndex;
+    }
 
-      const selector = `[data-day-index="${colIndex}"]`;
-      const weekTable = document.querySelector('.week-table');
+    // ===== 自動標記今天是星期幾 & 捲動到該欄位 =====
+    function highlightTodayColumn() {
+      var colIndex = getTodayColumnIndex();
+      var selector = '[data-day-index="' + colIndex + '"]';
+      var weekTable = document.querySelector('.week-table');
       if (weekTable) {
-        weekTable.querySelectorAll(selector).forEach(el => {
+        weekTable.querySelectorAll(selector).forEach(function(el) {
           el.classList.add('today-col');
         });
       }
 
-      const wrapper = document.querySelector('.week-wrapper');
-      const headerCell = document.querySelector('.week-header ' + selector);
+      var wrapper = document.querySelector('.week-wrapper');
+      var headerCell = document.querySelector('.week-header ' + selector);
       if (wrapper && headerCell) {
-        const wrapperRect = wrapper.getBoundingClientRect();
-        const cellRect = headerCell.getBoundingClientRect();
-        const offset = cellRect.left - wrapperRect.left - (wrapperRect.width / 2) + (cellRect.width / 2);
-        wrapper.scrollLeft += offset;
+        var wrapperRect = wrapper.getBoundingClientRect();
+        var cellRect = headerCell.getBoundingClientRect();
+        var offset = cellRect.left - wrapperRect.left - (wrapperRect.width / 2) + (cellRect.width / 2);
+        wrapper.scrollLeft = wrapper.scrollLeft + offset;
       }
     }
 
-    highlightTodayColumn();
+    // ===== 更新「本日小計」：和快速加 / 扣點聯動 =====
+    function updateTodaySummary(delta) {
+      var colIndex = getTodayColumnIndex();
+      var selector = '.day-summary-cell[data-day-index="' + colIndex + '"]';
+      var targetCell = document.querySelector(selector);
+      if (!targetCell) return;
+
+      var text = targetCell.textContent || '';
+      var match = text.match(/-?[0-9]+/);
+      var value = match ? parseInt(match[0], 10) : 0;
+      value = value + delta;
+
+      var sign = value >= 0 ? '+' : '';
+      targetCell.textContent = sign + value;
+      targetCell.classList.remove('day-summary-cell-positive');
+      targetCell.classList.remove('day-summary-cell-negative');
+      if (value > 0) targetCell.classList.add('day-summary-cell-positive');
+      else if (value < 0) targetCell.classList.add('day-summary-cell-negative');
+    }
+
+    // ===== 在「紀錄」Tab 新增一筆記錄 =====
+    function appendHistoryItem(delta, reason, fromWhere) {
+      if (!historyCard) return;
+      var item = document.createElement('div');
+      item.className = 'history-item';
+
+      var main = document.createElement('div');
+      main.className = 'history-main';
+
+      var descDiv = document.createElement('div');
+      var sign = delta > 0 ? '+' : '';
+      descDiv.textContent = sign + delta + ' 點：' + reason;
+
+      var dateDiv = document.createElement('div');
+      dateDiv.className = 'history-date';
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = (now.getMonth() + 1).toString().padStart(2, '0');
+      var day = now.getDate().toString().padStart(2, '0');
+      var hour = now.getHours().toString().padStart(2, '0');
+      var minute = now.getMinutes().toString().padStart(2, '0');
+      var dateStr = year + ' / ' + month + ' / ' + day + ' ' + hour + ':' + minute;
+      var kidName = kidsState[currentKid] ? kidsState[currentKid].displayName : '';
+      dateDiv.textContent = dateStr + ' · ' + kidName + ' · ' + fromWhere;
+
+      main.appendChild(descDiv);
+      main.appendChild(dateDiv);
+
+      var deltaDiv = document.createElement('div');
+      deltaDiv.className = 'history-delta';
+      deltaDiv.textContent = sign + delta;
+      deltaDiv.style.color = delta >= 0 ? '#4caf50' : '#c62828';
+
+      item.appendChild(main);
+      item.appendChild(deltaDiv);
+
+      historyCard.insertBefore(item, historyCard.firstChild);
+    }
+
+    // ===== 調整總點數 + 聯動本日小計 + 記錄備註 =====
+    function adjustPoints(delta) {
+      var kid = kidsState[currentKid];
+      if (!kid) return;
+
+      var oldValue = kid.totalPoints;
+      var newValue = oldValue + delta;
+      if (newValue < 0) newValue = 0;
+      var realDelta = newValue - oldValue;
+      if (realDelta === 0) return;
+      kid.totalPoints = newValue;
+
+      // 更新 header / 兌換頁面的顯示
+      renderCurrentKid();
+
+      // 更新本日小計
+      updateTodaySummary(realDelta);
+
+      // 取得備註
+      var note = quickNoteInput ? quickNoteInput.value.trim() : '';
+      var reason;
+      if (note) reason = note;
+      else reason = realDelta > 0 ? '臨時加點' : '扣點';
+
+      // 新增到紀錄 Tab
+      appendHistoryItem(realDelta, reason, '快速加 / 扣點');
+
+      // 清空備註輸入框
+      if (quickNoteInput) quickNoteInput.value = '';
+    }
+
+    if (quickPlusBtn) {
+      quickPlusBtn.addEventListener('click', function() {
+        adjustPoints(1);
+      });
+    }
+    if (quickMinusBtn) {
+      quickMinusBtn.addEventListener('click', function() {
+        adjustPoints(-1);
+      });
+    }
+
+    // ===== 初始化 =====
+    function init() {
+      renderCurrentKid();
+      highlightTodayColumn();
+    }
+
+    init();
   </script>
 </body>
 </html>
