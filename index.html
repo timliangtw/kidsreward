@@ -127,6 +127,7 @@
       overflow-x:auto;
       padding-bottom: 6px;
       position: relative;
+      scroll-behavior:smooth;
     }
     .week-table {
       min-width: 640px; /* 讓手機可以左右拖動 */
@@ -170,8 +171,9 @@
       text-align:center;
     }
     .day-cell input {
-      width: 22px;
-      height: 22px;
+      width: 30px;
+      height: 30px;
+      cursor:pointer;
     }
     .task-row {
       margin-bottom:6px;
@@ -185,24 +187,7 @@
     }
     .day-summary-cell-positive { color:#2e7d32; font-weight:600; }
     .day-summary-cell-negative { color:#c62828; font-weight:600; }
-
-    textarea {
-      width: 100%;
-      border: none;
-      resize: none;
-      min-height: 70px;
-      font-family: inherit;
-      font-size: 15px;
-      outline: none;
-    }
-
-    /* Rewards */
-    .reward-card { border-left: 5px solid #ffb74d; padding-left: 10px; }
-    .reward-title { font-size: 16px; font-weight: 600; }
-    .reward-points { font-size: 16px; color:#ff9800; margin-top:2px; font-weight:700; }
-    .reward-desc { font-size: 14px; color:#666; margin-top:2px; }
-    .reward-tags { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
-    .tag { font-size: 12px; background:#f1f3f4; padding:3px 8px; border-radius:999px; }
+    .today-col { background:#e3f2fd; border-radius:8px; }
 
     /* History */
     .history-item { display:flex; justify-content:space-between; margin-bottom:10px; font-size: 15px; }
@@ -305,86 +290,79 @@
         ✅ 已同步到雲端（Firebase）
       </div>
 
-      <!-- 今天 / 本週 Tab -->
+      <!-- 本週 Tab -->
       <section class="tab-page active" data-tab="today">
         <h2>本週任務表</h2>
         <div class="week-wrapper">
           <div class="week-table">
             <div class="week-header">
               <div class="task-name-header">任務</div>
-              <div class="day-header">一</div>
-              <div class="day-header">二</div>
-              <div class="day-header">三</div>
-              <div class="day-header">四</div>
-              <div class="day-header">五</div>
-              <div class="day-header">六</div>
-              <div class="day-header">日</div>
+              <div class="day-header" data-day-index="0">一</div>
+              <div class="day-header" data-day-index="1">二</div>
+              <div class="day-header" data-day-index="2">三</div>
+              <div class="day-header" data-day-index="3">四</div>
+              <div class="day-header" data-day-index="4">五</div>
+              <div class="day-header" data-day-index="5">六</div>
+              <div class="day-header" data-day-index="6">日</div>
             </div>
 
             <div class="day-summary-row">
               <div class="task-name-summary">本日小計</div>
-              <div class="day-summary-cell day-summary-cell-positive">+3</div>
-              <div class="day-summary-cell day-summary-cell-positive">+1</div>
-              <div class="day-summary-cell day-summary-cell-positive">+2</div>
-              <div class="day-summary-cell">+0</div>
-              <div class="day-summary-cell">+0</div>
-              <div class="day-summary-cell">+0</div>
-              <div class="day-summary-cell">+0</div>
+              <div class="day-summary-cell day-summary-cell-positive" data-day-index="0">+0</div>
+              <div class="day-summary-cell day-summary-cell-positive" data-day-index="1">+0</div>
+              <div class="day-summary-cell day-summary-cell-positive" data-day-index="2">+0</div>
+              <div class="day-summary-cell" data-day-index="3">+0</div>
+              <div class="day-summary-cell" data-day-index="4">+0</div>
+              <div class="day-summary-cell" data-day-index="5">+0</div>
+              <div class="day-summary-cell" data-day-index="6">+0</div>
             </div>
 
             <div class="task-row">
               <div class="task-name">自己穿好衣服</div>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" checked /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="0"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="1"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="2"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="3"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="4"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="5"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="6"><input type="checkbox" /></label>
             </div>
 
             <div class="task-row">
               <div class="task-name">寫完回家作業</div>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" checked /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="0"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="1"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="2"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="3"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="4"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="5"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="6"><input type="checkbox" /></label>
             </div>
 
             <div class="task-row">
               <div class="task-name">睡前收玩具</div>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
-              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="0"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="1"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="2"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="3"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="4"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="5"><input type="checkbox" /></label>
+              <label class="day-cell" data-day-index="6"><input type="checkbox" /></label>
             </div>
           </div>
         </div>
+
         <h2>快速加 / 扣點（爸媽）</h2>
         <div class="card">
-          <div class="small-label">臨時加點（特別貼心、額外努力）</div>
+          <div class="small-label">調整總點數（簡單版）</div>
           <div class="quick-row">
             <button class="pill-btn pill-plus" type="button">+1 點</button>
-            <button class="pill-btn pill-plus" type="button">+3 點</button>
-            <button class="pill-btn pill-plus" type="button">+5 點</button>
-          </div>
-          <div class="small-label">扣點（謹慎使用）</div>
-          <div class="quick-row">
             <button class="pill-btn pill-minus" type="button">-1 點</button>
-            <button class="pill-btn pill-minus" type="button">-3 點</button>
           </div>
-          <div class="small-label">備註（選填，記錄原因）</div>
-          <input class="small-input" placeholder="例：晚餐時一直打擾妹妹 -1 點（示意）" />
         </div>
       </section>
 
-      <!-- 獎勵 Tab -->
+      <!-- 兌換 Tab -->
       <section class="tab-page" data-tab="rewards">
         <h2>點數兌換</h2>
         <div class="card">
@@ -411,7 +389,7 @@
           <input class="small-input" placeholder="例：假日限定、需要爸媽先同意（示意）" />
 
           <div class="quick-row" style="margin-top:10px;">
-            <button class="pill-btn pill-minus" type="button">確認兌換（示意，尚未連接扣點功能）</button>
+            <button class="pill-btn pill-minus" type="button">確認兌換（示意）</button>
           </div>
 
           <div class="small-label" style="margin-top:8px;">
@@ -487,21 +465,21 @@
               <div class="settings-label">自己穿好衣服</div>
               <div class="settings-sub">每天顯示在本週任務表</div>
             </div>
-            <button class="settings-btn" type="button">停用</button>
+            <button class="settings-btn" type="button">刪除</button>
           </div>
           <div class="settings-item">
             <div>
               <div class="settings-label">寫完回家作業</div>
               <div class="settings-sub">平日顯示在本週任務表</div>
             </div>
-            <button class="settings-btn" type="button">停用</button>
+            <button class="settings-btn" type="button">刪除</button>
           </div>
           <div class="settings-item">
             <div>
               <div class="settings-label">睡前收玩具</div>
               <div class="settings-sub">每天顯示在本週任務表</div>
             </div>
-            <button class="settings-btn" type="button">停用</button>
+            <button class="settings-btn" type="button">刪除</button>
           </div>
           <div class="settings-item">
             <div>
@@ -545,8 +523,7 @@
             <button class="settings-btn" type="button">新增</button>
           </div>
         </div>
-
-        </section>
+      </section>
     </main>
 
     <nav>
@@ -570,7 +547,7 @@
   </div>
 
   <script>
-    // 簡單頁籤切換（純前端示意）
+    // ===== 簡單頁籤切換 =====
     const navItems = document.querySelectorAll('.nav-item');
     const pages = document.querySelectorAll('.tab-page');
 
@@ -591,8 +568,8 @@
       });
     });
 
-    // 簡單切換小孩主題（示意）：在 Leo / Natasha 之間切換
-    const app = document.querySelector('.app');
+    // ===== 小孩切換主題（示意） =====
+    const appEl = document.querySelector('.app');
     const switchBtn = document.querySelector('.switch-btn');
     const kidNameEl = document.querySelector('.kid-name');
     const avatarEl = document.querySelector('.avatar');
@@ -604,16 +581,16 @@
     switchBtn.addEventListener('click', () => {
       if (currentKid === 'leo') {
         currentKid = 'natasha';
-        app.classList.remove('boy');
-        app.classList.add('girl');
+        appEl.classList.remove('boy');
+        appEl.classList.add('girl');
         kidNameEl.textContent = 'Natasha';
         avatarEl.textContent = 'N';
         kidSubEl.textContent = '一起開心玩耍 🌈';
         totalPointsEl.innerHTML = '<span>⭐</span><span>18 點</span>';
       } else {
         currentKid = 'leo';
-        app.classList.remove('girl');
-        app.classList.add('boy');
+        appEl.classList.remove('girl');
+        appEl.classList.add('boy');
         kidNameEl.textContent = 'Leo';
         avatarEl.textContent = 'L';
         kidSubEl.textContent = '今天一起加油 💪';
@@ -621,11 +598,41 @@
       }
     });
 
-    // Firebase 同步狀態未接 Firebase 前，先示意：
-    // const syncBar = document.getElementById('sync-bar');
-    // syncBar.dataset.status = 'syncing';
-    // syncBar.className = 'sync-bar syncing';
-    // syncBar.textContent = '⏳ 正在同步到雲端…';
+    // ===== 自動標記今天是星期幾 & 捲動到該欄位 =====
+    function highlightTodayColumn() {
+      const today = new Date();
+      const jsDay = today.getDay(); // 0=Sun,1=Mon,...6=Sat
+      let colIndex;
+      switch (jsDay) {
+        case 0: colIndex = 6; break; // 日
+        case 1: colIndex = 0; break; // 一
+        case 2: colIndex = 1; break; // 二
+        case 3: colIndex = 2; break; // 三
+        case 4: colIndex = 3; break; // 四
+        case 5: colIndex = 4; break; // 五
+        case 6: colIndex = 5; break; // 六
+        default: colIndex = 0;
+      }
+
+      const selector = `[data-day-index="${colIndex}"]`;
+      const weekTable = document.querySelector('.week-table');
+      if (weekTable) {
+        weekTable.querySelectorAll(selector).forEach(el => {
+          el.classList.add('today-col');
+        });
+      }
+
+      const wrapper = document.querySelector('.week-wrapper');
+      const headerCell = document.querySelector('.week-header ' + selector);
+      if (wrapper && headerCell) {
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const cellRect = headerCell.getBoundingClientRect();
+        const offset = cellRect.left - wrapperRect.left - (wrapperRect.width / 2) + (cellRect.width / 2);
+        wrapper.scrollLeft += offset;
+      }
+    }
+
+    highlightTodayColumn();
   </script>
 </body>
 </html>
