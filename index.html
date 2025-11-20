@@ -126,58 +126,65 @@
     .week-wrapper {
       overflow-x:auto;
       padding-bottom: 6px;
+      position: relative;
     }
-    .week-grid {
-      display:flex;
-      gap: 10px;
-      min-width: 620px; /* 讓手機可以左右拖動 */
-    }
-    .day-col {
+    .week-table {
+      min-width: 640px; /* 讓手機可以左右拖動 */
+      border-radius: 16px;
       background:#fff;
-      border-radius:16px;
-      padding: 10px;
-      min-width: 120px;
       box-shadow:0 2px 4px rgba(0,0,0,0.04);
+      padding:10px;
     }
-    .day-title {
-      font-size: 15px;
-      font-weight: 700;
-      margin-bottom: 6px;
-      text-align:center;
-    }
-    .day-task-row {
+    .week-header,
+    .task-row,
+    .day-summary-row {
       display:flex;
       align-items:center;
       gap: 6px;
-      margin-bottom: 6px;
       font-size: 14px;
     }
-    .day-task-row input {
+    .week-header {
+      font-weight:700;
+      margin-bottom:6px;
+    }
+    .task-name-header,
+    .task-name,
+    .task-name-summary {
+      flex:0 0 120px;
+      min-width:120px;
+      font-size:14px;
+      font-weight:600;
+    }
+    /* 凍結在左邊的任務名稱 */
+    .task-name,
+    .task-name-summary {
+      position: sticky;
+      left: 0;
+      background:#fff;
+      z-index:1;
+    }
+    .day-header,
+    .day-cell,
+    .day-summary-cell {
+      flex:1;
+      text-align:center;
+    }
+    .day-cell input {
       width: 22px;
       height: 22px;
     }
-        .day-task-label {
-      flex: 1;
-      line-height: 1.2;
+    .task-row {
+      margin-bottom:6px;
     }
-    .day-summary {
-      margin-top: 8px;
-      padding-top: 6px;
-      border-top: 1px dashed #eee;
-      font-size: 13px;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
+    .day-summary-row {
+      margin-top:4px;
+      padding-top:4px;
+      border-top:1px dashed #eee;
+      font-size:13px;
       color:#555;
     }
-    .day-summary-value-positive {
-      color:#2e7d32;
-      font-weight:600;
-    }
-    .day-summary-value-negative {
-      color:#c62828;
-      font-weight:600;
-    }
+    .day-summary-cell-positive { color:#2e7d32; font-weight:600; }
+    .day-summary-cell-negative { color:#c62828; font-weight:600; }
 
     textarea {
       width: 100%;
@@ -302,145 +309,60 @@
       <section class="tab-page active" data-tab="today">
         <h2>本週任務表</h2>
         <div class="week-wrapper">
-          <div class="week-grid">
-            <div class="day-col">
-              <div class="day-title">一</div>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">自己穿好衣服</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">寫完回家作業</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">睡前收玩具</span>
-              </label>
-              <div class="day-summary">
-                <span>本日小計</span>
-                <span class="day-summary-value-positive">+3 點</span>
-              </div>
+          <div class="week-table">
+            <div class="week-header">
+              <div class="task-name-header">任務</div>
+              <div class="day-header">一</div>
+              <div class="day-header">二</div>
+              <div class="day-header">三</div>
+              <div class="day-header">四</div>
+              <div class="day-header">五</div>
+              <div class="day-header">六</div>
+              <div class="day-header">日</div>
             </div>
 
-            <div class="day-col">
-              <div class="day-title">二</div>
-              <label class="day-task-row">
-                <input type="checkbox" checked />
-                <span class="day-task-label">自己穿好衣服</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">寫完回家作業</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">睡前收玩具</span>
-              </label>
-              <div class="day-summary">
-                <span>本日小計</span>
-                <span class="day-summary-value-positive">+1 點</span>
-              </div>
+            <div class="day-summary-row">
+              <div class="task-name-summary">本日小計</div>
+              <div class="day-summary-cell day-summary-cell-positive">+3</div>
+              <div class="day-summary-cell day-summary-cell-positive">+1</div>
+              <div class="day-summary-cell day-summary-cell-positive">+2</div>
+              <div class="day-summary-cell">+0</div>
+              <div class="day-summary-cell">+0</div>
+              <div class="day-summary-cell">+0</div>
+              <div class="day-summary-cell">+0</div>
             </div>
 
-            <div class="day-col">
-              <div class="day-title">三</div>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">自己穿好衣服</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" checked />
-                <span class="day-task-label">寫完回家作業</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">睡前收玩具</span>
-              </label>
-              <div class="day-summary">
-                <span>本日小計</span>
-                <span class="day-summary-value-positive">+2 點</span>
-              </div>
+            <div class="task-row">
+              <div class="task-name">自己穿好衣服</div>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" checked /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
             </div>
 
-            <div class="day-col">
-              <div class="day-title">四</div>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">自己穿好衣服</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">寫完回家作業</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">睡前收玩具</span>
-              </label>
-              <div class="day-summary">
-                <span>本日小計</span>
-                <span class="day-summary-value-positive">+0 點</span>
-              </div>
+            <div class="task-row">
+              <div class="task-name">寫完回家作業</div>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" checked /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
             </div>
 
-            <div class="day-col">
-              <div class="day-title">五</div>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">自己穿好衣服</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">寫完回家作業</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">睡前收玩具</span>
-              </label>
-              <div class="day-summary">
-                <span>本日小計</span>
-                <span class="day-summary-value-positive">+0 點</span>
-              </div>
-            </div>
-
-            <div class="day-col">
-              <div class="day-title">六</div>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">自己穿好衣服</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">寫完回家作業</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">睡前收玩具</span>
-              </label>
-              <div class="day-summary">
-                <span>本日小計</span>
-                <span class="day-summary-value-positive">+0 點</span>
-              </div>
-            </div>
-
-            <div class="day-col">
-              <div class="day-title">日</div>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">自己穿好衣服</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">寫完回家作業</span>
-              </label>
-              <label class="day-task-row">
-                <input type="checkbox" />
-                <span class="day-task-label">睡前收玩具</span>
-              </label>
-              <div class="day-summary">
-                <span>本日小計</span>
-                <span class="day-summary-value-positive">+0 點</span>
-              </div>
+            <div class="task-row">
+              <div class="task-name">睡前收玩具</div>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
+              <label class="day-cell"><input type="checkbox" /></label>
             </div>
           </div>
         </div>
@@ -558,42 +480,73 @@
           </div>
         </div>
 
-        <h2>任務管理（示意）</h2>
+        <h2>任務管理</h2>
         <div class="card settings-group">
           <div class="settings-item">
             <div>
-              <div class="settings-label">早上自己穿好衣服</div>
-              <div class="settings-sub">+1 點 · 每天</div>
+              <div class="settings-label">自己穿好衣服</div>
+              <div class="settings-sub">每天顯示在本週任務表</div>
             </div>
-            <button class="settings-btn" type="button">設定</button>
+            <button class="settings-btn" type="button">停用</button>
           </div>
           <div class="settings-item">
             <div>
               <div class="settings-label">寫完回家作業</div>
-              <div class="settings-sub">+2 點 · 平日</div>
+              <div class="settings-sub">平日顯示在本週任務表</div>
             </div>
-            <button class="settings-btn" type="button">設定</button>
+            <button class="settings-btn" type="button">停用</button>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">睡前收玩具</div>
+              <div class="settings-sub">每天顯示在本週任務表</div>
+            </div>
+            <button class="settings-btn" type="button">停用</button>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">新增任務</div>
+              <input class="small-input" placeholder="例：主動幫忙做家事、閱讀 10 分鐘……" />
+              <div class="settings-sub">（之後實作時：按下「新增」會把任務加入本週任務表，預設有打勾框但不直接給點數）</div>
+            </div>
+            <button class="settings-btn" type="button">新增</button>
           </div>
         </div>
 
-        <h2>獎勵管理（示意）</h2>
+        <h2>每日點數規則</h2>
         <div class="card settings-group">
+          <div class="small-label">設定「一天完成幾項任務」會加多少點（不是每個任務都有自己的點數）。</div>
           <div class="settings-item">
             <div>
-              <div class="settings-label">去看火車</div>
-              <div class="settings-sub">15 點 · 假日限定</div>
+              <div class="settings-label">規則 1</div>
+              <div class="settings-sub">完成 ≧ 1 項任務 → 當天加 1 點</div>
             </div>
-            <button class="settings-btn" type="button">設定</button>
+            <button class="settings-btn" type="button">編輯</button>
           </div>
           <div class="settings-item">
             <div>
-              <div class="settings-label">去湯姆熊</div>
-              <div class="settings-sub">25 點 · 週末限定</div>
+              <div class="settings-label">規則 2</div>
+              <div class="settings-sub">完成 ≧ 3 項任務 → 當天加 2 點</div>
             </div>
-            <button class="settings-btn" type="button">設定</button>
+            <button class="settings-btn" type="button">編輯</button>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-label">新增規則</div>
+              <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                <span style="font-size:14px;">完成 ≧</span>
+                <input class="small-input" style="max-width:70px;" placeholder="幾項" />
+                <span style="font-size:14px;">項 → 加</span>
+                <input class="small-input" style="max-width:70px;" placeholder="幾點" />
+                <span style="font-size:14px;">點</span>
+              </div>
+              <div class="settings-sub">（之後實作時：這些規則會用來計算本週任務表上每一天的「本日小計」。）</div>
+            </div>
+            <button class="settings-btn" type="button">新增</button>
           </div>
         </div>
-      </section>
+
+        </section>
     </main>
 
     <nav>
