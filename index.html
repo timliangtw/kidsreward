@@ -21,6 +21,7 @@
       display: flex;
       flex-direction: column;
       min-height: 88vh;
+      position: relative; /* For Modal positioning context */
     }
 
     /* 男孩 / 女孩 主題色 */
@@ -157,16 +158,12 @@
       min-width:120px;
       font-size:14px;
       font-weight:600;
-      
-      /* ===== CSS 修正重點 ===== */
       position: sticky;
       left: 0;
       background: #fff; 
       z-index: 10;
       box-shadow: 2px 0 5px rgba(0,0,0,0.05); 
       margin-right: -1px;
-      
-      /* 關鍵修正：強制拉滿高度，並用 flex 讓文字垂直置中 */
       align-self: stretch; 
       display: flex;
       align-items: center;
@@ -240,8 +237,10 @@
       flex:1;
       border-radius:999px;
       border:none;
-      padding:8px 4px;
-      font-size:15px;
+      /* 改大按鈕 */
+      padding:14px 8px; 
+      font-size:16px;
+      font-weight: 700;
       cursor:pointer;
     }
     .pill-plus { background:#e3f2fd; color:#1565c0; }
@@ -282,6 +281,35 @@
     #toast-msg {
       pointer-events: none;
     }
+
+    /* Modal Styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9990;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      width: 90%;
+      max-width: 400px;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .modal h3 { margin-bottom: 16px; font-size: 20px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #555; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .btn-cancel { background: #f5f5f5; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+    .btn-save { background: #4f8cf7; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; }
+    
+    .radio-group { display: flex; gap: 16px; }
+    .radio-label { display: flex; align-items: center; gap: 6px; font-size: 15px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -387,21 +415,8 @@
       <!-- 設定 Tab -->
       <section class="tab-page" data-tab="settings">
         <h2>小孩管理</h2>
-        <div class="card settings-group">
-          <div class="settings-item">
-            <div>
-              <div class="settings-label">Leo</div>
-              <div class="settings-sub">代表顏色：藍色</div>
-            </div>
-            <button class="settings-btn" type="button">編輯</button>
-          </div>
-          <div class="settings-item">
-            <div>
-              <div class="settings-label">Natasha</div>
-              <div class="settings-sub">代表顏色：粉色</div>
-            </div>
-            <button class="settings-btn" type="button">編輯</button>
-          </div>
+        <div class="card settings-group" id="settings-kid-list">
+          <!-- 小孩列表由 JS 動態產生 -->
         </div>
 
         <h2>任務管理</h2>
@@ -485,10 +500,46 @@
         設定
       </div>
     </nav>
+
+    <!-- 編輯小孩的彈窗 (Modal) -->
+    <div class="modal-overlay" id="edit-kid-modal">
+      <div class="modal">
+        <h3>編輯小孩資料</h3>
+        <input type="hidden" id="edit-kid-key" />
+        
+        <div class="form-group">
+          <label>顯示名稱 (Name)</label>
+          <input id="edit-kid-name" class="small-input" />
+        </div>
+
+        <div class="form-group">
+          <label>主題顏色</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="edit-kid-theme" value="boy"> 藍色 (Boy)
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="edit-kid-theme" value="girl"> 粉色 (Girl)
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>目前總點數 (可直接修改)</label>
+          <input id="edit-kid-points" type="number" class="small-input" />
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-cancel" id="btn-cancel-edit">取消</button>
+          <button class="btn-save" id="btn-save-edit">儲存</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>
-    // ===== UI Helper: Toast (取代 alert/confirm) =====
+    // ===== UI Helper: Toast =====
     function showToast(msg) {
       var toast = document.getElementById('toast-msg');
       if (!toast) {
@@ -577,7 +628,7 @@
       { id: 'toys',  name: '睡前收玩具' }
     ];
 
-    // 實際使用的 State 變數（會先嘗試讀取存檔）
+    // 實際使用的 State 變數
     var kidsState = JSON.parse(JSON.stringify(defaultKidsState));
     var tasksState = JSON.parse(JSON.stringify(defaultTasksState));
     var currentKid = 'leo';
@@ -606,21 +657,17 @@
       }
     }
 
-    // ===== 修改後的重置邏輯：不依賴 confirm 和 reload =====
     function performReset() {
-      // 1. 清空 Storage
       localStorage.removeItem(STORAGE_KEY);
-      
-      // 2. 還原變數到預設值 (Deep Copy)
       kidsState = JSON.parse(JSON.stringify(defaultKidsState));
       tasksState = JSON.parse(JSON.stringify(defaultTasksState));
       currentKid = 'leo';
       
-      // 3. 重新渲染所有畫面
       renderCurrentKid();
       renderWeekTable();
       renderHistoryList();
       renderSettingsTaskList();
+      renderSettingsKidList(); // Refresh kid list
       
       showToast('資料已重置成預設值');
     }
@@ -650,26 +697,31 @@
     var settingsNewTaskInput = document.getElementById('settings-new-task-input');
     var settingsNewTaskBtn = document.getElementById('settings-new-task-btn');
     
-    // 修改重置按鈕的事件監聽
+    var settingsKidListEl = document.getElementById('settings-kid-list');
+
+    // Modal Elements
+    var editKidModal = document.getElementById('edit-kid-modal');
+    var editKidKeyInput = document.getElementById('edit-kid-key');
+    var editKidNameInput = document.getElementById('edit-kid-name');
+    var editKidPointsInput = document.getElementById('edit-kid-points');
+    var btnCancelEdit = document.getElementById('btn-cancel-edit');
+    var btnSaveEdit = document.getElementById('btn-save-edit');
+
+    // Reset Btn
     var resetDataBtn = document.getElementById('reset-data-btn');
     if (resetDataBtn) {
       resetDataBtn.addEventListener('click', function() {
-        // 第一段：確認
         if (resetDataBtn.textContent !== '確定重置？') {
           resetDataBtn.textContent = '確定重置？';
-          resetDataBtn.style.backgroundColor = '#ffebee'; // 淺紅色警示
-          
-          // 3秒後自動恢復
+          resetDataBtn.style.backgroundColor = '#ffebee'; 
           setTimeout(function() {
-            if (resetDataBtn.parentElement) { // 確保元件還在
+            if (resetDataBtn.parentElement) { 
               resetDataBtn.textContent = '重置';
               resetDataBtn.style.backgroundColor = '';
             }
           }, 3000);
         } else {
-          // 第二段：執行
           performReset();
-          // 恢復按鈕樣式
           resetDataBtn.textContent = '重置';
           resetDataBtn.style.backgroundColor = '';
         }
@@ -699,9 +751,7 @@
 
     // ===== 計算每日點數 =====
     function calculateDailyTotal(kid, dayIndex) {
-      // 防止讀取到舊資料結構沒有 weeklyChecks 的情況
       if (!kid.weeklyChecks) kid.weeklyChecks = [[],[],[],[],[],[],[]];
-      
       var checkedCount = kid.weeklyChecks[dayIndex] ? kid.weeklyChecks[dayIndex].length : 0;
       var rulePoints = 0;
       
@@ -778,7 +828,6 @@
         nameDiv.textContent = task.name;
         row.appendChild(nameDiv);
 
-        // Fix: Use forEach to fix scope issue
         [0, 1, 2, 3, 4, 5, 6].forEach(function(i) {
           var label = document.createElement('label');
           label.className = 'day-cell';
@@ -832,10 +881,116 @@
         if (kid.totalPoints < 0) kid.totalPoints = 0;
       }
 
-      saveData(); // Phase 4: Save
+      saveData(); 
       renderWeekTable();
       renderCurrentKid();
     }
+
+    // ===== 渲染「設定頁面：小孩列表」 (新增) =====
+    function renderSettingsKidList() {
+      if (!settingsKidListEl) return;
+      settingsKidListEl.innerHTML = '';
+
+      Object.keys(kidsState).forEach(function(key) {
+        var kid = kidsState[key];
+        var item = document.createElement('div');
+        item.className = 'settings-item';
+
+        var infoDiv = document.createElement('div');
+        var nameDiv = document.createElement('div');
+        nameDiv.className = 'settings-label';
+        nameDiv.textContent = kid.displayName;
+        
+        var subDiv = document.createElement('div');
+        subDiv.className = 'settings-sub';
+        var themeName = kid.theme === 'boy' ? '藍色' : '粉色';
+        subDiv.textContent = '代表顏色：' + themeName + ' · 總點數 ' + kid.totalPoints;
+
+        infoDiv.appendChild(nameDiv);
+        infoDiv.appendChild(subDiv);
+
+        var btn = document.createElement('button');
+        btn.className = 'settings-btn';
+        btn.textContent = '編輯';
+        btn.type = 'button';
+        btn.addEventListener('click', function() {
+          openEditKidModal(key);
+        });
+
+        item.appendChild(infoDiv);
+        item.appendChild(btn);
+        settingsKidListEl.appendChild(item);
+      });
+    }
+
+    // ===== 編輯小孩 Modal 邏輯 =====
+    function openEditKidModal(key) {
+      var kid = kidsState[key];
+      if (!kid) return;
+
+      editKidKeyInput.value = key;
+      editKidNameInput.value = kid.displayName;
+      editKidPointsInput.value = kid.totalPoints;
+
+      // 設定 Radio Button
+      var radios = document.getElementsByName('edit-kid-theme');
+      for(var i=0; i<radios.length; i++) {
+        if (radios[i].value === kid.theme) {
+          radios[i].checked = true;
+        }
+      }
+
+      editKidModal.classList.add('open');
+    }
+
+    function closeEditKidModal() {
+      editKidModal.classList.remove('open');
+    }
+
+    function saveKidEdit() {
+      var key = editKidKeyInput.value;
+      var kid = kidsState[key];
+      if (!kid) return;
+
+      var newName = editKidNameInput.value.trim();
+      var newPointsStr = editKidPointsInput.value;
+      var newPoints = parseInt(newPointsStr, 10);
+
+      if (!newName) {
+        showToast('請輸入名字');
+        return;
+      }
+      if (isNaN(newPoints) || newPoints < 0) {
+        showToast('請輸入有效的點數');
+        return;
+      }
+
+      var newTheme = 'boy';
+      var radios = document.getElementsByName('edit-kid-theme');
+      for(var i=0; i<radios.length; i++) {
+        if (radios[i].checked) {
+          newTheme = radios[i].value;
+          break;
+        }
+      }
+
+      // 更新 State
+      kid.displayName = newName;
+      kid.totalPoints = newPoints;
+      kid.theme = newTheme;
+
+      saveData();
+      
+      // 重新渲染相關介面
+      renderSettingsKidList();
+      renderCurrentKid(); // 如果剛好是當前小孩，更新 Header
+      closeEditKidModal();
+      showToast('儲存成功');
+    }
+
+    if (btnCancelEdit) btnCancelEdit.addEventListener('click', closeEditKidModal);
+    if (btnSaveEdit) btnSaveEdit.addEventListener('click', saveKidEdit);
+
 
     // ===== 渲染「設定頁面：任務列表」 =====
     function renderSettingsTaskList() {
@@ -858,7 +1013,6 @@
         infoDiv.appendChild(nameDiv);
         infoDiv.appendChild(subDiv);
 
-        // 兩段式確認按鈕
         var btn = document.createElement('button');
         btn.className = 'settings-btn';
         btn.textContent = '刪除';
@@ -897,7 +1051,7 @@
         name: val
       };
       tasksState.push(newTask);
-      saveData(); // Phase 4: Save
+      saveData(); 
       renderWeekTable();
       renderSettingsTaskList();
       settingsNewTaskInput.value = '';
@@ -908,7 +1062,7 @@
 
     function handleDeleteTask(taskId) {
       tasksState = tasksState.filter(function(t) { return t.id !== taskId; });
-      saveData(); // Phase 4: Save
+      saveData(); 
       renderWeekTable();
       renderSettingsTaskList();
       showToast('任務已刪除');
@@ -920,7 +1074,11 @@
       if (!kid) return;
 
       kidNameEl.textContent = kid.displayName;
-      avatarEl.textContent = kid.avatar;
+      avatarEl.textContent = kid.avatar; // 這裡只用第一個字，可優化
+      // 優化：Avatar 顯示名字第一個字
+      var firstChar = kid.displayName.charAt(0).toUpperCase();
+      avatarEl.textContent = firstChar; 
+
       kidSubEl.textContent = kid.slogan;
 
       appEl.classList.toggle('boy', kid.theme === 'boy');
@@ -978,7 +1136,7 @@
         if (kid.totalPoints < 0) kid.totalPoints = 0;
       }
       
-      saveData(); // Phase 4: Save
+      saveData(); 
       renderWeekTable();
       renderCurrentKid();
     }
@@ -1054,7 +1212,7 @@
       if (kid.totalPoints < 0) kid.totalPoints = 0;
       kid.history.splice(idx, 1);
       
-      saveData(); // Phase 4: Save
+      saveData(); 
       renderCurrentKid();
       renderHistoryList();
       showToast('紀錄已刪除');
@@ -1074,7 +1232,7 @@
         dateStr: dateStr
       };
       kid.history.unshift(rec);
-      saveData(); // Phase 4: Save
+      saveData(); 
       renderHistoryList();
     }
 
@@ -1107,7 +1265,7 @@
       renderCurrentKid();
       var note = redeemNoteInput ? redeemNoteInput.value.trim() : '';
       var reason = '兌換：' + (name || '未命名獎勵') + (note ? '（' + note + '）' : '');
-      appendHistoryItem(-pts, reason, '兌換'); // saved in here
+      appendHistoryItem(-pts, reason, '兌換'); 
       if (redeemNameInput) redeemNameInput.value = '';
       redeemPointsInput.value = '';
       if (redeemNoteInput) redeemNoteInput.value = '';
@@ -1117,11 +1275,12 @@
     if (redeemConfirmBtn) redeemConfirmBtn.addEventListener('click', handleRedeemConfirm);
 
     function init() {
-      loadData(); // Phase 4: Load on init
+      loadData(); 
       renderCurrentKid();
       renderWeekTable();
       renderHistoryList();
       renderSettingsTaskList();
+      renderSettingsKidList(); // 新增
     }
 
     init();
