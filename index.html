@@ -47,6 +47,7 @@
       justify-content:center;
       font-weight: 700;
       font-size: 22px;
+      color: #333;
     }
     .kid-name { font-size: 22px; font-weight: 700; }
     .kid-sub { font-size: 14px; opacity: 0.95; }
@@ -130,7 +131,7 @@
       scroll-behavior:smooth;
     }
     .week-table {
-      min-width: 640px; /* 讓手機可以左右拖動 */
+      min-width: 640px; 
       border-radius: 16px;
       background:#fff;
       box-shadow:0 2px 4px rgba(0,0,0,0.04);
@@ -148,6 +149,7 @@
       font-weight:700;
       margin-bottom:6px;
     }
+    
     .task-name-header,
     .task-name,
     .task-name-summary {
@@ -155,15 +157,21 @@
       min-width:120px;
       font-size:14px;
       font-weight:600;
-    }
-    /* 凍結在左邊的任務名稱 */
-    .task-name,
-    .task-name-summary {
+      
+      /* ===== CSS 修正重點 ===== */
       position: sticky;
       left: 0;
-      background:#fff;
-      z-index:1;
+      background: #fff; 
+      z-index: 10;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.05); 
+      margin-right: -1px;
+      
+      /* 關鍵修正：強制拉滿高度，並用 flex 讓文字垂直置中 */
+      align-self: stretch; 
+      display: flex;
+      align-items: center;
     }
+
     .day-header,
     .day-cell,
     .day-summary-cell {
@@ -223,6 +231,7 @@
       padding:6px 12px;
       font-size: 14px;
       cursor: pointer;
+      transition: all 0.2s;
     }
 
     /* Quick points */
@@ -268,6 +277,11 @@
     }
     .nav-icon { display:block; font-size: 20px; margin-bottom:2px; }
     .nav-item.active { color:#3366cc; font-weight:600; }
+
+    /* Toast Message */
+    #toast-msg {
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -294,9 +308,9 @@
     </header>
 
     <main>
-      <!-- Firebase 同步狀態列（之後可依 Firebase 實際狀態切換 class） -->
+      <!-- Firebase 同步狀態列 -->
       <div class="sync-bar synced" id="sync-bar" data-status="synced">
-        ✅ 已同步到雲端（Firebase）
+        ✅ 已儲存於本機 (LocalStorage)
       </div>
 
       <!-- 本週 Tab -->
@@ -347,10 +361,6 @@
           <div class="quick-row" style="margin-top:10px;">
             <button id="redeem-confirm-btn" class="pill-btn pill-minus" type="button">確認兌換</button>
           </div>
-
-          <div class="small-label" style="margin-top:8px;">
-            之後實作時：按下「確認兌換」會從 Firebase 讀取目前點數 → 扣除 → 寫回，並新增一筆兌換紀錄。
-          </div>
         </div>
 
         <h2>最近一次兌換（示意）</h2>
@@ -362,7 +372,7 @@
             </div>
             <div class="history-delta" style="color:#c62828;">-20</div>
           </div>
-          <div style="font-size:13px;color:#777;">（未來會從 Firebase 讀出多筆兌換紀錄）</div>
+          <div style="font-size:13px;color:#777;">（歷史紀錄區）</div>
         </div>
       </section>
 
@@ -370,27 +380,7 @@
       <section class="tab-page" data-tab="history">
         <h2>近期點數紀錄</h2>
         <div class="card" id="points-history-card">
-          <div class="history-item">
-            <div class="history-main">
-              <div>+2 點：寫完回家作業</div>
-              <div class="history-date">2025 / 11 / 19 晚上</div>
-            </div>
-            <div class="history-delta" style="color:#4caf50;">+2</div>
-          </div>
-          <div class="history-item">
-            <div class="history-main">
-              <div>-1 點：晚餐時吵鬧不聽提醒</div>
-              <div class="history-date">2025 / 11 / 19 晚上</div>
-            </div>
-            <div class="history-delta" style="color:#c62828;">-1</div>
-          </div>
-          <div class="history-item">
-            <div class="history-main">
-              <div>+3 點：主動幫忙收拾客廳</div>
-              <div class="history-date">2025 / 11 / 18 下午</div>
-            </div>
-            <div class="history-delta" style="color:#4caf50;">+3</div>
-          </div>
+          <!-- 紀錄由 JS 動態產生 -->
         </div>
       </section>
 
@@ -401,14 +391,14 @@
           <div class="settings-item">
             <div>
               <div class="settings-label">Leo</div>
-              <div class="settings-sub">代表顏色：藍色 · 總點數 32</div>
+              <div class="settings-sub">代表顏色：藍色</div>
             </div>
             <button class="settings-btn" type="button">編輯</button>
           </div>
           <div class="settings-item">
             <div>
               <div class="settings-label">Natasha</div>
-              <div class="settings-sub">代表顏色：粉色 · 總點數 18</div>
+              <div class="settings-sub">代表顏色：粉色</div>
             </div>
             <button class="settings-btn" type="button">編輯</button>
           </div>
@@ -416,34 +406,17 @@
 
         <h2>任務管理</h2>
         <div class="card settings-group">
+          <!-- 這裡改成動態生成，方便新增/刪除 -->
+          <div id="settings-task-list"></div>
+
+          <!-- 新增任務區塊 -->
           <div class="settings-item">
-            <div>
-              <div class="settings-label">自己穿好衣服</div>
-              <div class="settings-sub">每天顯示在本週任務表</div>
-            </div>
-            <button class="settings-btn" type="button">刪除</button>
-          </div>
-          <div class="settings-item">
-            <div>
-              <div class="settings-label">寫完回家作業</div>
-              <div class="settings-sub">平日顯示在本週任務表</div>
-            </div>
-            <button class="settings-btn" type="button">刪除</button>
-          </div>
-          <div class="settings-item">
-            <div>
-              <div class="settings-label">睡前收玩具</div>
-              <div class="settings-sub">每天顯示在本週任務表</div>
-            </div>
-            <button class="settings-btn" type="button">刪除</button>
-          </div>
-          <div class="settings-item">
-            <div>
+            <div style="width: 100%; padding-right: 10px;">
               <div class="settings-label">新增任務</div>
-              <input class="small-input" placeholder="例：主動幫忙做家事、閱讀 10 分鐘……" />
-              <div class="settings-sub">（之後實作時：按下「新增」會把任務加入本週任務表，預設有打勾框但不直接給點數）</div>
+              <input id="settings-new-task-input" class="small-input" placeholder="例：主動幫忙做家事、閱讀 10 分鐘……" />
+              <div class="settings-sub">（新增後會即時顯示在本週任務表）</div>
             </div>
-            <button class="settings-btn" type="button">新增</button>
+            <button id="settings-new-task-btn" class="settings-btn" type="button">新增</button>
           </div>
         </div>
 
@@ -479,6 +452,18 @@
             <button class="settings-btn" type="button">新增</button>
           </div>
         </div>
+
+        <!-- Phase 4 新增：重置資料按鈕 -->
+        <h2>資料選項</h2>
+        <div class="card settings-group">
+          <div class="settings-item">
+            <div>
+              <div class="settings-label" style="color:#c62828;">重置所有資料</div>
+              <div class="settings-sub">清除所有紀錄，回到初始狀態。</div>
+            </div>
+            <button id="reset-data-btn" class="settings-btn" type="button" style="color:#c62828;border-color:#ffcdd2;">重置</button>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -502,7 +487,34 @@
     </nav>
   </div>
 
-    <script>
+  <script>
+    // ===== UI Helper: Toast (取代 alert/confirm) =====
+    function showToast(msg) {
+      var toast = document.getElementById('toast-msg');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast-msg';
+        toast.style.position = 'fixed';
+        toast.style.bottom = '80px';
+        toast.style.left = '50%';
+        toast.style.transform = 'translateX(-50%)';
+        toast.style.background = 'rgba(0,0,0,0.8)';
+        toast.style.color = '#fff';
+        toast.style.padding = '10px 20px';
+        toast.style.borderRadius = '20px';
+        toast.style.zIndex = '9999';
+        toast.style.fontSize = '14px';
+        toast.style.transition = 'opacity 0.5s';
+        toast.style.opacity = '0';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.style.opacity = '1';
+      setTimeout(function() {
+        toast.style.opacity = '0';
+      }, 2000);
+    }
+
     // ===== 簡單頁籤切換 =====
     var navItems = document.querySelectorAll('.nav-item');
     var pages = document.querySelectorAll('.tab-page');
@@ -524,16 +536,26 @@
       });
     });
 
-    // ===== 狀態定義（兩個小孩的總點數） =====
-    var kidsState = {
+    // ===== Phase 4: LocalStorage 設定 =====
+    var STORAGE_KEY = 'family_points_data_v1';
+
+    // ===== 每日規則 State =====
+    var rulesState = [
+      { threshold: 3, points: 2 }, 
+      { threshold: 1, points: 1 }  
+    ];
+
+    // ===== 狀態定義 (預設值) =====
+    var defaultKidsState = {
       leo: {
         key: 'leo',
         displayName: 'Leo',
         avatar: 'L',
         slogan: '今天一起加油 💪',
         theme: 'boy',
-        totalPoints: 32,
-        dailySummary: [0,0,0,0,0,0,0],
+        totalPoints: 0,
+        dailySummary: [0,0,0,0,0,0,0], 
+        weeklyChecks: [[],[],[],[],[],[],[]], 
         history: []
       },
       natasha: {
@@ -542,24 +564,66 @@
         avatar: 'N',
         slogan: '一起開心玩耍 🌈',
         theme: 'girl',
-        totalPoints: 18,
+        totalPoints: 0,
         dailySummary: [0,0,0,0,0,0,0],
+        weeklyChecks: [[],[],[],[],[],[],[]],
         history: []
       }
     };
 
-    // ===== 週任務 & 本日小計狀態（Phase 1） =====
-    // 之後可以再擴充成每個小孩 / 每週一份，先用簡單版本
-    var tasksState = [
+    var defaultTasksState = [
       { id: 'dress', name: '自己穿好衣服' },
       { id: 'hw',    name: '寫完回家作業' },
       { id: 'toys',  name: '睡前收玩具' }
     ];
 
-    // 0~6 對應 一~日 的本日小計，先全部 0，之後再接任務與規則
-    var dailySummary = [0, 0, 0, 0, 0, 0, 0]; // 已改為每個小孩各自一份 dailySummary，這個變數只當預設用
-
+    // 實際使用的 State 變數（會先嘗試讀取存檔）
+    var kidsState = JSON.parse(JSON.stringify(defaultKidsState));
+    var tasksState = JSON.parse(JSON.stringify(defaultTasksState));
     var currentKid = 'leo';
+
+    // ===== 儲存與讀取 =====
+    function saveData() {
+      var data = {
+        kids: kidsState,
+        tasks: tasksState,
+        rules: rulesState
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function loadData() {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          var data = JSON.parse(raw);
+          if (data.kids) kidsState = data.kids;
+          if (data.tasks) tasksState = data.tasks;
+          if (data.rules) rulesState = data.rules;
+        } catch (e) {
+          console.error('讀取存檔失敗，使用預設值', e);
+        }
+      }
+    }
+
+    // ===== 修改後的重置邏輯：不依賴 confirm 和 reload =====
+    function performReset() {
+      // 1. 清空 Storage
+      localStorage.removeItem(STORAGE_KEY);
+      
+      // 2. 還原變數到預設值 (Deep Copy)
+      kidsState = JSON.parse(JSON.stringify(defaultKidsState));
+      tasksState = JSON.parse(JSON.stringify(defaultTasksState));
+      currentKid = 'leo';
+      
+      // 3. 重新渲染所有畫面
+      renderCurrentKid();
+      renderWeekTable();
+      renderHistoryList();
+      renderSettingsTaskList();
+      
+      showToast('資料已重置成預設值');
+    }
 
     // ===== DOM 參照 =====
     var appEl = document.querySelector('.app');
@@ -571,7 +635,6 @@
 
     var redeemKidNameEl = document.getElementById('redeem-kid-name');
     var redeemKidPointsEl = document.getElementById('redeem-kid-points');
-
     var redeemNameInput = document.getElementById('redeem-name-input');
     var redeemPointsInput = document.getElementById('redeem-points-input');
     var redeemNoteInput = document.getElementById('redeem-note-input');
@@ -583,26 +646,92 @@
 
     var historyCard = document.getElementById('points-history-card');
 
-    // ===== 工具：格式化本日小計顯示 =====
+    var settingsTaskListEl = document.getElementById('settings-task-list');
+    var settingsNewTaskInput = document.getElementById('settings-new-task-input');
+    var settingsNewTaskBtn = document.getElementById('settings-new-task-btn');
+    
+    // 修改重置按鈕的事件監聽
+    var resetDataBtn = document.getElementById('reset-data-btn');
+    if (resetDataBtn) {
+      resetDataBtn.addEventListener('click', function() {
+        // 第一段：確認
+        if (resetDataBtn.textContent !== '確定重置？') {
+          resetDataBtn.textContent = '確定重置？';
+          resetDataBtn.style.backgroundColor = '#ffebee'; // 淺紅色警示
+          
+          // 3秒後自動恢復
+          setTimeout(function() {
+            if (resetDataBtn.parentElement) { // 確保元件還在
+              resetDataBtn.textContent = '重置';
+              resetDataBtn.style.backgroundColor = '';
+            }
+          }, 3000);
+        } else {
+          // 第二段：執行
+          performReset();
+          // 恢復按鈕樣式
+          resetDataBtn.textContent = '重置';
+          resetDataBtn.style.backgroundColor = '';
+        }
+      });
+    }
+
+    // ===== 工具函式 =====
     function formatDailySummary(value) {
       var sign = value >= 0 ? '+' : '';
       return sign + value;
     }
 
-    // ===== 渲染「本週任務表」(Phase 2: UI 完全由 state 長出來) =====
+    function getTodayColumnIndex() {
+      var today = new Date();
+      var jsDay = today.getDay(); 
+      switch (jsDay) {
+        case 0: return 6; 
+        case 1: return 0; 
+        case 2: return 1; 
+        case 3: return 2; 
+        case 4: return 3; 
+        case 5: return 4; 
+        case 6: return 5; 
+        default: return 0;
+      }
+    }
+
+    // ===== 計算每日點數 =====
+    function calculateDailyTotal(kid, dayIndex) {
+      // 防止讀取到舊資料結構沒有 weeklyChecks 的情況
+      if (!kid.weeklyChecks) kid.weeklyChecks = [[],[],[],[],[],[],[]];
+      
+      var checkedCount = kid.weeklyChecks[dayIndex] ? kid.weeklyChecks[dayIndex].length : 0;
+      var rulePoints = 0;
+      
+      var maxPoints = 0;
+      var matched = false;
+      rulesState.forEach(function(rule) {
+        if (checkedCount >= rule.threshold) {
+          if (rule.points > maxPoints) {
+            maxPoints = rule.points;
+            matched = true;
+          }
+        }
+      });
+      if (matched) rulePoints = maxPoints;
+
+      var manualPoints = kid.dailySummary[dayIndex] || 0;
+      return rulePoints + manualPoints;
+    }
+
+    // ===== 渲染「本週任務表」 =====
     function renderWeekTable() {
       var container = document.getElementById('week-table');
       if (!container) return;
 
-      // 清空舊內容
       container.innerHTML = '';
-
       var weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
-      // Header 一排：任務 + 一二三四五六日
+      // Header
       var headerRow = document.createElement('div');
       headerRow.className = 'week-header';
-
       var taskHeader = document.createElement('div');
       taskHeader.className = 'task-name-header';
       taskHeader.textContent = '任務';
@@ -615,37 +744,31 @@
         cell.textContent = label;
         headerRow.appendChild(cell);
       });
-
       container.appendChild(headerRow);
 
-      // 本日小計一排
+      // Summary Row
       var summaryRow = document.createElement('div');
       summaryRow.className = 'day-summary-row';
-
       var summaryName = document.createElement('div');
       summaryName.className = 'task-name-summary';
       summaryName.textContent = '本日小計';
       summaryRow.appendChild(summaryName);
 
-      var kidForSummary = kidsState[currentKid];
-      var ds = (kidForSummary && kidForSummary.dailySummary) ? kidForSummary.dailySummary : [0,0,0,0,0,0,0];
-
-      ds.forEach(function(value, index) {
+      var kid = kidsState[currentKid];
+      
+      for (var i = 0; i < 7; i++) {
+        var total = calculateDailyTotal(kid, i);
         var cell = document.createElement('div');
         cell.className = 'day-summary-cell';
-        cell.setAttribute('data-day-index', String(index));
-        cell.textContent = formatDailySummary(value);
-        if (value > 0) {
-          cell.classList.add('day-summary-cell-positive');
-        } else if (value < 0) {
-          cell.classList.add('day-summary-cell-negative');
-        }
+        cell.setAttribute('data-day-index', String(i));
+        cell.textContent = formatDailySummary(total);
+        if (total > 0) cell.classList.add('day-summary-cell-positive');
+        else if (total < 0) cell.classList.add('day-summary-cell-negative');
         summaryRow.appendChild(cell);
-      });
-
+      }
       container.appendChild(summaryRow);
 
-      // 任務列：從 tasksState 產生
+      // Tasks Rows
       tasksState.forEach(function(task) {
         var row = document.createElement('div');
         row.className = 'task-row';
@@ -655,29 +778,143 @@
         nameDiv.textContent = task.name;
         row.appendChild(nameDiv);
 
-        // 七天的打勾格子
-        for (var i = 0; i < 7; i++) {
+        // Fix: Use forEach to fix scope issue
+        [0, 1, 2, 3, 4, 5, 6].forEach(function(i) {
           var label = document.createElement('label');
           label.className = 'day-cell';
           label.setAttribute('data-day-index', String(i));
-          label.setAttribute('data-task-id', task.id);
-
+          
           var checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
-          // Phase 3 再讓這些 checkbox 和 state 連動，現在純 UI
+          
+          if (kid.weeklyChecks && kid.weeklyChecks[i] && kid.weeklyChecks[i].includes(task.id)) {
+            checkbox.checked = true;
+          }
+
+          checkbox.addEventListener('change', function(e) {
+            handleTaskToggle(i, task.id, e.target.checked);
+          });
 
           label.appendChild(checkbox);
           row.appendChild(label);
-        }
-
+        });
         container.appendChild(row);
       });
 
-      // 產完表格後，再去標記今天的欄位
       highlightTodayColumn();
     }
 
-    // ===== 小孩切換 + header / 兌換區渲染 =====
+    // ===== 任務打勾邏輯 =====
+    function handleTaskToggle(dayIndex, taskId, isChecked) {
+      var kid = kidsState[currentKid];
+      if (!kid) return;
+
+      var oldDailyTotal = calculateDailyTotal(kid, dayIndex);
+
+      if (!kid.weeklyChecks) kid.weeklyChecks = [[],[],[],[],[],[],[]];
+      var dayChecks = kid.weeklyChecks[dayIndex];
+      
+      if (isChecked) {
+        if (!dayChecks.includes(taskId)) {
+          dayChecks.push(taskId);
+        }
+      } else {
+        var idx = dayChecks.indexOf(taskId);
+        if (idx > -1) {
+          dayChecks.splice(idx, 1);
+        }
+      }
+
+      var newDailyTotal = calculateDailyTotal(kid, dayIndex);
+      var diff = newDailyTotal - oldDailyTotal;
+      if (diff !== 0) {
+        kid.totalPoints += diff;
+        if (kid.totalPoints < 0) kid.totalPoints = 0;
+      }
+
+      saveData(); // Phase 4: Save
+      renderWeekTable();
+      renderCurrentKid();
+    }
+
+    // ===== 渲染「設定頁面：任務列表」 =====
+    function renderSettingsTaskList() {
+      if (!settingsTaskListEl) return;
+      settingsTaskListEl.innerHTML = ''; 
+
+      tasksState.forEach(function(task) {
+        var item = document.createElement('div');
+        item.className = 'settings-item';
+
+        var infoDiv = document.createElement('div');
+        var nameDiv = document.createElement('div');
+        nameDiv.className = 'settings-label';
+        nameDiv.textContent = task.name;
+        
+        var subDiv = document.createElement('div');
+        subDiv.className = 'settings-sub';
+        subDiv.textContent = '顯示在本週任務表';
+
+        infoDiv.appendChild(nameDiv);
+        infoDiv.appendChild(subDiv);
+
+        // 兩段式確認按鈕
+        var btn = document.createElement('button');
+        btn.className = 'settings-btn';
+        btn.textContent = '刪除';
+        btn.type = 'button';
+        
+        btn.addEventListener('click', function() {
+          if (btn.textContent !== '確定？') {
+             btn.textContent = '確定？';
+             btn.style.color = '#c62828';
+             setTimeout(function(){ 
+               if(btn.parentElement) { 
+                 btn.textContent = '刪除'; 
+                 btn.style.color = '';
+               }
+             }, 3000);
+           } else {
+             handleDeleteTask(task.id);
+           }
+        });
+
+        item.appendChild(infoDiv);
+        item.appendChild(btn);
+        settingsTaskListEl.appendChild(item);
+      });
+    }
+
+    function handleAddTask() {
+      if (!settingsNewTaskInput) return;
+      var val = settingsNewTaskInput.value.trim();
+      if (!val) {
+        showToast('請輸入任務名稱');
+        return;
+      }
+      var newTask = {
+        id: 't_' + Date.now(),
+        name: val
+      };
+      tasksState.push(newTask);
+      saveData(); // Phase 4: Save
+      renderWeekTable();
+      renderSettingsTaskList();
+      settingsNewTaskInput.value = '';
+      showToast('任務已新增');
+    }
+
+    if (settingsNewTaskBtn) settingsNewTaskBtn.addEventListener('click', handleAddTask);
+
+    function handleDeleteTask(taskId) {
+      tasksState = tasksState.filter(function(t) { return t.id !== taskId; });
+      saveData(); // Phase 4: Save
+      renderWeekTable();
+      renderSettingsTaskList();
+      showToast('任務已刪除');
+    }
+
+    // ===== 小孩切換 & UI 更新 =====
     function renderCurrentKid() {
       var kid = kidsState[currentKid];
       if (!kid) return;
@@ -707,25 +944,6 @@
       });
     }
 
-    // ===== 計算今天是星期幾（對應欄位 index） =====
-    function getTodayColumnIndex() {
-      var today = new Date();
-      var jsDay = today.getDay(); // 0=Sun,1=Mon,...6=Sat
-      var colIndex;
-      switch (jsDay) {
-        case 0: colIndex = 6; break; // 日
-        case 1: colIndex = 0; break; // 一
-        case 2: colIndex = 1; break; // 二
-        case 3: colIndex = 2; break; // 三
-        case 4: colIndex = 3; break; // 四
-        case 5: colIndex = 4; break; // 五
-        case 6: colIndex = 5; break; // 六
-        default: colIndex = 0;
-      }
-      return colIndex;
-    }
-
-    // ===== 標記今天是星期幾 & 捲動到該欄位 =====
     function highlightTodayColumn() {
       var colIndex = getTodayColumnIndex();
       var selector = '[data-day-index="' + colIndex + '"]';
@@ -735,7 +953,6 @@
           el.classList.add('today-col');
         });
       }
-
       var wrapper = document.querySelector('.week-wrapper');
       var headerCell = document.querySelector('.week-header ' + selector);
       if (wrapper && headerCell) {
@@ -746,27 +963,26 @@
       }
     }
 
-    // ===== 更新「本日小計」：和快速加 / 扣點聯動（用 state 再重畫） =====
-    function updateTodaySummary(delta) {
+    // ===== 手動更新本日小計 (快速加/扣點) =====
+    function updateManualSummary(delta) {
       var colIndex = getTodayColumnIndex();
-      if (colIndex < 0 || colIndex > 6) return;
-
       var kid = kidsState[currentKid];
       if (!kid) return;
-      if (!kid.dailySummary) {
-        kid.dailySummary = [0,0,0,0,0,0,0];
+
+      var oldTotal = calculateDailyTotal(kid, colIndex);
+      kid.dailySummary[colIndex] = (kid.dailySummary[colIndex] || 0) + delta;
+      var newTotal = calculateDailyTotal(kid, colIndex);
+      var diff = newTotal - oldTotal;
+      if (diff !== 0) {
+        kid.totalPoints += diff;
+        if (kid.totalPoints < 0) kid.totalPoints = 0;
       }
-      var arr = kid.dailySummary;
-
-      var current = arr[colIndex] || 0;
-      var next = current + delta;
-      arr[colIndex] = next;
-
-      // 直接重畫整個週表，避免 DOM 層層 patch
+      
+      saveData(); // Phase 4: Save
       renderWeekTable();
+      renderCurrentKid();
     }
 
-    // ===== 紀錄列表渲染：跟著小孩切換 =====
     function renderHistoryList() {
       if (!historyCard) return;
       historyCard.innerHTML = '';
@@ -819,52 +1035,37 @@
 
         item.appendChild(main);
         item.appendChild(deltaDiv);
-
         historyCard.appendChild(item);
       });
     }
 
-    // ===== 從紀錄刪除一筆，並把點數加回去 =====
     function handleDeleteHistory(id) {
       var kid = kidsState[currentKid];
       if (!kid || !kid.history) return;
-
       var idx = -1;
       for (var i = 0; i < kid.history.length; i++) {
         if (kid.history[i].id === id) {
-          idx = i;
-          break;
+          idx = i; break;
         }
       }
       if (idx === -1) return;
-
       var rec = kid.history[idx];
-
-      // 還原點數：原本是 delta，加總點數時就做反向操作
-      kid.totalPoints = kid.totalPoints - rec.delta;
+      kid.totalPoints -= rec.delta;
       if (kid.totalPoints < 0) kid.totalPoints = 0;
-
-      // 移除這筆紀錄
       kid.history.splice(idx, 1);
-
+      
+      saveData(); // Phase 4: Save
       renderCurrentKid();
       renderHistoryList();
+      showToast('紀錄已刪除');
     }
 
-    // ===== 在「紀錄」Tab 新增一筆記錄（寫入 state，再重畫列表） =====
     function appendHistoryItem(delta, reason, fromWhere) {
       var kid = kidsState[currentKid];
       if (!kid) return;
       if (!kid.history) kid.history = [];
-
       var now = new Date();
-      var year = now.getFullYear();
-      var month = (now.getMonth() + 1).toString().padStart(2, '0');
-      var day = now.getDate().toString().padStart(2, '0');
-      var hour = now.getHours().toString().padStart(2, '0');
-      var minute = now.getMinutes().toString().padStart(2, '0');
-      var dateStr = year + ' / ' + month + ' / ' + day + ' ' + hour + ':' + minute;
-
+      var dateStr = now.getFullYear() + ' / ' + (now.getMonth()+1).toString().padStart(2,'0') + ' / ' + now.getDate().toString().padStart(2,'0') + ' ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
       var rec = {
         id: 'h_' + Date.now() + '_' + Math.random().toString(16).slice(2),
         delta: delta,
@@ -872,102 +1073,55 @@
         fromWhere: fromWhere,
         dateStr: dateStr
       };
-
-      // 新紀錄放在最上面
       kid.history.unshift(rec);
-
-      // 重新渲染紀錄列表
+      saveData(); // Phase 4: Save
       renderHistoryList();
     }
 
-    // ===== 調整總點數 + 聯動本日小計 + 記錄備註 =====
     function adjustPoints(delta) {
-      var kid = kidsState[currentKid];
-      if (!kid) return;
-
-      var oldValue = kid.totalPoints;
-      var newValue = oldValue + delta;
-      if (newValue < 0) newValue = 0;
-      var realDelta = newValue - oldValue;
-      if (realDelta === 0) return;
-      kid.totalPoints = newValue;
-
-      // 更新 header / 兌換頁面的顯示
-      renderCurrentKid();
-
-      // 更新本日小計（用 state）
-      updateTodaySummary(realDelta);
-
-      // 取得備註
+      updateManualSummary(delta);
       var note = quickNoteInput ? quickNoteInput.value.trim() : '';
-      var reason;
-      if (note) reason = note;
-      else reason = realDelta > 0 ? '臨時加點' : '扣點';
-
-      // 新增到紀錄 Tab
-      appendHistoryItem(realDelta, reason, '快速加 / 扣點');
-
-      // 清空備註輸入框
+      var reason = note ? note : (delta > 0 ? '臨時加點' : '扣點');
+      appendHistoryItem(delta, reason, '快速加 / 扣點');
       if (quickNoteInput) quickNoteInput.value = '';
+      showToast(delta > 0 ? '加點成功！' : '已扣點');
     }
 
-    if (quickPlusBtn) {
-      quickPlusBtn.addEventListener('click', function() {
-        adjustPoints(1);
-      });
-    }
-    if (quickMinusBtn) {
-      quickMinusBtn.addEventListener('click', function() {
-        adjustPoints(-1);
-      });
-    }
+    if (quickPlusBtn) quickPlusBtn.addEventListener('click', function() { adjustPoints(1); });
+    if (quickMinusBtn) quickMinusBtn.addEventListener('click', function() { adjustPoints(-1); });
 
-    // 兌換確認：扣除目前小孩的總點數，並寫入紀錄
     function handleRedeemConfirm() {
       var kid = kidsState[currentKid];
-      if (!kid) return;
-      if (!redeemPointsInput) return;
-
+      if (!kid || !redeemPointsInput) return;
       var name = redeemNameInput ? redeemNameInput.value.trim() : '';
-      var ptsRaw = redeemPointsInput.value.trim();
-      var pts = parseInt(ptsRaw, 10);
+      var pts = parseInt(redeemPointsInput.value.trim(), 10);
       if (!pts || pts <= 0) {
-        alert('請輸入要扣除的「點數」，必須是正整數');
+        showToast('請輸入正確的點數');
         return;
       }
-
       if (kid.totalPoints < pts) {
-        alert('點數不足，無法兌換這個獎勵');
+        showToast('點數不足！');
         return;
       }
-
-      // 扣除點數
-      kid.totalPoints = kid.totalPoints - pts;
+      kid.totalPoints -= pts;
       renderCurrentKid();
-
       var note = redeemNoteInput ? redeemNoteInput.value.trim() : '';
-      var reason = '兌換：' + (name || '未命名獎勵');
-      if (note) {
-        reason += '（' + note + '）';
-      }
-
-      appendHistoryItem(-pts, reason, '兌換');
-
-      // 清空輸入欄位
+      var reason = '兌換：' + (name || '未命名獎勵') + (note ? '（' + note + '）' : '');
+      appendHistoryItem(-pts, reason, '兌換'); // saved in here
       if (redeemNameInput) redeemNameInput.value = '';
       redeemPointsInput.value = '';
       if (redeemNoteInput) redeemNoteInput.value = '';
+      showToast('兌換成功！');
     }
 
-    if (redeemConfirmBtn) {
-      redeemConfirmBtn.addEventListener('click', handleRedeemConfirm);
-    }
+    if (redeemConfirmBtn) redeemConfirmBtn.addEventListener('click', handleRedeemConfirm);
 
-    // ===== 初始化 =====
     function init() {
+      loadData(); // Phase 4: Load on init
       renderCurrentKid();
       renderWeekTable();
       renderHistoryList();
+      renderSettingsTaskList();
     }
 
     init();
