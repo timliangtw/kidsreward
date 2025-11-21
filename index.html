@@ -194,6 +194,15 @@
     .history-main { max-width: 70%; }
     .history-date { font-size: 13px; color:#888; }
     .history-delta { font-weight: 600; font-size: 16px; }
+    .history-delete-btn {
+      margin-top: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      background: #fafafa;
+      cursor: pointer;
+    }
 
     /* Settings */
     .settings-group { margin-bottom: 16px; }
@@ -294,62 +303,7 @@
       <section class="tab-page active" data-tab="today">
         <h2>本週任務表</h2>
         <div class="week-wrapper">
-          <div class="week-table">
-            <div class="week-header">
-              <div class="task-name-header">任務</div>
-              <div class="day-header" data-day-index="0">一</div>
-              <div class="day-header" data-day-index="1">二</div>
-              <div class="day-header" data-day-index="2">三</div>
-              <div class="day-header" data-day-index="3">四</div>
-              <div class="day-header" data-day-index="4">五</div>
-              <div class="day-header" data-day-index="5">六</div>
-              <div class="day-header" data-day-index="6">日</div>
-            </div>
-
-            <div class="day-summary-row">
-              <div class="task-name-summary">本日小計</div>
-              <div class="day-summary-cell day-summary-cell-positive" data-day-index="0">+0</div>
-              <div class="day-summary-cell day-summary-cell-positive" data-day-index="1">+0</div>
-              <div class="day-summary-cell day-summary-cell-positive" data-day-index="2">+0</div>
-              <div class="day-summary-cell" data-day-index="3">+0</div>
-              <div class="day-summary-cell" data-day-index="4">+0</div>
-              <div class="day-summary-cell" data-day-index="5">+0</div>
-              <div class="day-summary-cell" data-day-index="6">+0</div>
-            </div>
-
-            <div class="task-row">
-              <div class="task-name">自己穿好衣服</div>
-              <label class="day-cell" data-day-index="0"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="1"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="2"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="3"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="4"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="5"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="6"><input type="checkbox" /></label>
-            </div>
-
-            <div class="task-row">
-              <div class="task-name">寫完回家作業</div>
-              <label class="day-cell" data-day-index="0"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="1"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="2"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="3"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="4"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="5"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="6"><input type="checkbox" /></label>
-            </div>
-
-            <div class="task-row">
-              <div class="task-name">睡前收玩具</div>
-              <label class="day-cell" data-day-index="0"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="1"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="2"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="3"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="4"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="5"><input type="checkbox" /></label>
-              <label class="day-cell" data-day-index="6"><input type="checkbox" /></label>
-            </div>
-          </div>
+        <div class="week-table" id="week-table"></div>
         </div>
 
         <h2>快速加 / 扣點（爸媽）</h2>
@@ -382,16 +336,16 @@
         <h2>輸入兌換內容</h2>
         <div class="card">
           <div class="small-label">兌換名稱</div>
-          <input class="small-input" placeholder="例：去看火車、換一個玩具、多看 10 分鐘卡通……" />
+          <input id="redeem-name-input" class="small-input" placeholder="例：去看火車、換一個玩具、多看 10 分鐘卡通……" />
 
           <div class="small-label">扣除點數</div>
-          <input class="small-input" placeholder="例：20" />
+          <input id="redeem-points-input" class="small-input" placeholder="例：20" />
 
           <div class="small-label">備註（選填，說明或限制條件）</div>
-          <input class="small-input" placeholder="例：假日限定、需要爸媽先同意（示意）" />
+          <input id="redeem-note-input" class="small-input" placeholder="例：假日限定、需要爸媽先同意（示意）" />
 
           <div class="quick-row" style="margin-top:10px;">
-            <button class="pill-btn pill-minus" type="button">確認兌換（示意）</button>
+            <button id="redeem-confirm-btn" class="pill-btn pill-minus" type="button">確認兌換</button>
           </div>
 
           <div class="small-label" style="margin-top:8px;">
@@ -578,7 +532,9 @@
         avatar: 'L',
         slogan: '今天一起加油 💪',
         theme: 'boy',
-        totalPoints: 32
+        totalPoints: 32,
+        dailySummary: [0,0,0,0,0,0,0],
+        history: []
       },
       natasha: {
         key: 'natasha',
@@ -586,9 +542,22 @@
         avatar: 'N',
         slogan: '一起開心玩耍 🌈',
         theme: 'girl',
-        totalPoints: 18
+        totalPoints: 18,
+        dailySummary: [0,0,0,0,0,0,0],
+        history: []
       }
     };
+
+    // ===== 週任務 & 本日小計狀態（Phase 1） =====
+    // 之後可以再擴充成每個小孩 / 每週一份，先用簡單版本
+    var tasksState = [
+      { id: 'dress', name: '自己穿好衣服' },
+      { id: 'hw',    name: '寫完回家作業' },
+      { id: 'toys',  name: '睡前收玩具' }
+    ];
+
+    // 0~6 對應 一~日 的本日小計，先全部 0，之後再接任務與規則
+    var dailySummary = [0, 0, 0, 0, 0, 0, 0]; // 已改為每個小孩各自一份 dailySummary，這個變數只當預設用
 
     var currentKid = 'leo';
 
@@ -603,15 +572,116 @@
     var redeemKidNameEl = document.getElementById('redeem-kid-name');
     var redeemKidPointsEl = document.getElementById('redeem-kid-points');
 
+    var redeemNameInput = document.getElementById('redeem-name-input');
+    var redeemPointsInput = document.getElementById('redeem-points-input');
+    var redeemNoteInput = document.getElementById('redeem-note-input');
+    var redeemConfirmBtn = document.getElementById('redeem-confirm-btn');
+
     var quickPlusBtn = document.querySelector('#quick-points-card .pill-plus');
     var quickMinusBtn = document.querySelector('#quick-points-card .pill-minus');
     var quickNoteInput = document.getElementById('quick-note-input');
 
     var historyCard = document.getElementById('points-history-card');
 
+    // ===== 工具：格式化本日小計顯示 =====
+    function formatDailySummary(value) {
+      var sign = value >= 0 ? '+' : '';
+      return sign + value;
+    }
+
+    // ===== 渲染「本週任務表」(Phase 2: UI 完全由 state 長出來) =====
+    function renderWeekTable() {
+      var container = document.getElementById('week-table');
+      if (!container) return;
+
+      // 清空舊內容
+      container.innerHTML = '';
+
+      var weekDays = ['一', '二', '三', '四', '五', '六', '日'];
+
+      // Header 一排：任務 + 一二三四五六日
+      var headerRow = document.createElement('div');
+      headerRow.className = 'week-header';
+
+      var taskHeader = document.createElement('div');
+      taskHeader.className = 'task-name-header';
+      taskHeader.textContent = '任務';
+      headerRow.appendChild(taskHeader);
+
+      weekDays.forEach(function(label, index) {
+        var cell = document.createElement('div');
+        cell.className = 'day-header';
+        cell.setAttribute('data-day-index', String(index));
+        cell.textContent = label;
+        headerRow.appendChild(cell);
+      });
+
+      container.appendChild(headerRow);
+
+      // 本日小計一排
+      var summaryRow = document.createElement('div');
+      summaryRow.className = 'day-summary-row';
+
+      var summaryName = document.createElement('div');
+      summaryName.className = 'task-name-summary';
+      summaryName.textContent = '本日小計';
+      summaryRow.appendChild(summaryName);
+
+      var kidForSummary = kidsState[currentKid];
+      var ds = (kidForSummary && kidForSummary.dailySummary) ? kidForSummary.dailySummary : [0,0,0,0,0,0,0];
+
+      ds.forEach(function(value, index) {
+        var cell = document.createElement('div');
+        cell.className = 'day-summary-cell';
+        cell.setAttribute('data-day-index', String(index));
+        cell.textContent = formatDailySummary(value);
+        if (value > 0) {
+          cell.classList.add('day-summary-cell-positive');
+        } else if (value < 0) {
+          cell.classList.add('day-summary-cell-negative');
+        }
+        summaryRow.appendChild(cell);
+      });
+
+      container.appendChild(summaryRow);
+
+      // 任務列：從 tasksState 產生
+      tasksState.forEach(function(task) {
+        var row = document.createElement('div');
+        row.className = 'task-row';
+
+        var nameDiv = document.createElement('div');
+        nameDiv.className = 'task-name';
+        nameDiv.textContent = task.name;
+        row.appendChild(nameDiv);
+
+        // 七天的打勾格子
+        for (var i = 0; i < 7; i++) {
+          var label = document.createElement('label');
+          label.className = 'day-cell';
+          label.setAttribute('data-day-index', String(i));
+          label.setAttribute('data-task-id', task.id);
+
+          var checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          // Phase 3 再讓這些 checkbox 和 state 連動，現在純 UI
+
+          label.appendChild(checkbox);
+          row.appendChild(label);
+        }
+
+        container.appendChild(row);
+      });
+
+      // 產完表格後，再去標記今天的欄位
+      highlightTodayColumn();
+    }
+
     // ===== 小孩切換 + header / 兌換區渲染 =====
     function renderCurrentKid() {
       var kid = kidsState[currentKid];
+      if (!kid) return;
+
       kidNameEl.textContent = kid.displayName;
       avatarEl.textContent = kid.avatar;
       kidSubEl.textContent = kid.slogan;
@@ -632,6 +702,8 @@
       switchBtn.addEventListener('click', function() {
         currentKid = currentKid === 'leo' ? 'natasha' : 'leo';
         renderCurrentKid();
+        renderWeekTable();
+        renderHistoryList();
       });
     }
 
@@ -653,7 +725,7 @@
       return colIndex;
     }
 
-    // ===== 自動標記今天是星期幾 & 捲動到該欄位 =====
+    // ===== 標記今天是星期幾 & 捲動到該欄位 =====
     function highlightTodayColumn() {
       var colIndex = getTodayColumnIndex();
       var selector = '[data-day-index="' + colIndex + '"]';
@@ -674,41 +746,117 @@
       }
     }
 
-    // ===== 更新「本日小計」：和快速加 / 扣點聯動 =====
+    // ===== 更新「本日小計」：和快速加 / 扣點聯動（用 state 再重畫） =====
     function updateTodaySummary(delta) {
       var colIndex = getTodayColumnIndex();
-      var selector = '.day-summary-cell[data-day-index="' + colIndex + '"]';
-      var targetCell = document.querySelector(selector);
-      if (!targetCell) return;
+      if (colIndex < 0 || colIndex > 6) return;
 
-      var text = targetCell.textContent || '';
-      var match = text.match(/-?[0-9]+/);
-      var value = match ? parseInt(match[0], 10) : 0;
-      value = value + delta;
+      var kid = kidsState[currentKid];
+      if (!kid) return;
+      if (!kid.dailySummary) {
+        kid.dailySummary = [0,0,0,0,0,0,0];
+      }
+      var arr = kid.dailySummary;
 
-      var sign = value >= 0 ? '+' : '';
-      targetCell.textContent = sign + value;
-      targetCell.classList.remove('day-summary-cell-positive');
-      targetCell.classList.remove('day-summary-cell-negative');
-      if (value > 0) targetCell.classList.add('day-summary-cell-positive');
-      else if (value < 0) targetCell.classList.add('day-summary-cell-negative');
+      var current = arr[colIndex] || 0;
+      var next = current + delta;
+      arr[colIndex] = next;
+
+      // 直接重畫整個週表，避免 DOM 層層 patch
+      renderWeekTable();
     }
 
-    // ===== 在「紀錄」Tab 新增一筆記錄 =====
-    function appendHistoryItem(delta, reason, fromWhere) {
+    // ===== 紀錄列表渲染：跟著小孩切換 =====
+    function renderHistoryList() {
       if (!historyCard) return;
-      var item = document.createElement('div');
-      item.className = 'history-item';
+      historyCard.innerHTML = '';
 
-      var main = document.createElement('div');
-      main.className = 'history-main';
+      var kid = kidsState[currentKid];
+      if (!kid || !kid.history || kid.history.length === 0) {
+        var empty = document.createElement('div');
+        empty.style.fontSize = '14px';
+        empty.style.color = '#777';
+        empty.textContent = '目前沒有紀錄';
+        historyCard.appendChild(empty);
+        return;
+      }
 
-      var descDiv = document.createElement('div');
-      var sign = delta > 0 ? '+' : '';
-      descDiv.textContent = sign + delta + ' 點：' + reason;
+      kid.history.forEach(function(rec) {
+        var item = document.createElement('div');
+        item.className = 'history-item';
+        item.setAttribute('data-history-id', rec.id);
 
-      var dateDiv = document.createElement('div');
-      dateDiv.className = 'history-date';
+        var main = document.createElement('div');
+        main.className = 'history-main';
+
+        var descDiv = document.createElement('div');
+        var sign = rec.delta > 0 ? '+' : '';
+        descDiv.textContent = sign + rec.delta + ' 點：' + rec.reason;
+
+        var dateDiv = document.createElement('div');
+        dateDiv.className = 'history-date';
+        var kidName = kidsState[currentKid] ? kidsState[currentKid].displayName : '';
+        dateDiv.textContent = rec.dateStr + ' · ' + kidName + ' · ' + rec.fromWhere;
+
+        var actionsDiv = document.createElement('div');
+        var delBtn = document.createElement('button');
+        delBtn.className = 'history-delete-btn';
+        delBtn.textContent = '刪除這筆紀錄（並還原點數）';
+        delBtn.addEventListener('click', function() {
+          handleDeleteHistory(rec.id);
+        });
+        actionsDiv.appendChild(delBtn);
+
+        main.appendChild(descDiv);
+        main.appendChild(dateDiv);
+        main.appendChild(actionsDiv);
+
+        var deltaDiv = document.createElement('div');
+        deltaDiv.className = 'history-delta';
+        var signDelta = rec.delta > 0 ? '+' : '';
+        deltaDiv.textContent = signDelta + rec.delta;
+        deltaDiv.style.color = rec.delta >= 0 ? '#4caf50' : '#c62828';
+
+        item.appendChild(main);
+        item.appendChild(deltaDiv);
+
+        historyCard.appendChild(item);
+      });
+    }
+
+    // ===== 從紀錄刪除一筆，並把點數加回去 =====
+    function handleDeleteHistory(id) {
+      var kid = kidsState[currentKid];
+      if (!kid || !kid.history) return;
+
+      var idx = -1;
+      for (var i = 0; i < kid.history.length; i++) {
+        if (kid.history[i].id === id) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx === -1) return;
+
+      var rec = kid.history[idx];
+
+      // 還原點數：原本是 delta，加總點數時就做反向操作
+      kid.totalPoints = kid.totalPoints - rec.delta;
+      if (kid.totalPoints < 0) kid.totalPoints = 0;
+
+      // 移除這筆紀錄
+      kid.history.splice(idx, 1);
+
+      renderCurrentKid();
+      renderHistoryList();
+    }
+
+    // ===== 在「紀錄」Tab 新增一筆記錄（寫入 state，再重畫列表） =====
+    function appendHistoryItem(delta, reason, fromWhere) {
+      var kid = kidsState[currentKid];
+      if (!kid) return;
+      if (!kid.history) kid.history = [];
+
       var now = new Date();
       var year = now.getFullYear();
       var month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -716,21 +864,20 @@
       var hour = now.getHours().toString().padStart(2, '0');
       var minute = now.getMinutes().toString().padStart(2, '0');
       var dateStr = year + ' / ' + month + ' / ' + day + ' ' + hour + ':' + minute;
-      var kidName = kidsState[currentKid] ? kidsState[currentKid].displayName : '';
-      dateDiv.textContent = dateStr + ' · ' + kidName + ' · ' + fromWhere;
 
-      main.appendChild(descDiv);
-      main.appendChild(dateDiv);
+      var rec = {
+        id: 'h_' + Date.now() + '_' + Math.random().toString(16).slice(2),
+        delta: delta,
+        reason: reason,
+        fromWhere: fromWhere,
+        dateStr: dateStr
+      };
 
-      var deltaDiv = document.createElement('div');
-      deltaDiv.className = 'history-delta';
-      deltaDiv.textContent = sign + delta;
-      deltaDiv.style.color = delta >= 0 ? '#4caf50' : '#c62828';
+      // 新紀錄放在最上面
+      kid.history.unshift(rec);
 
-      item.appendChild(main);
-      item.appendChild(deltaDiv);
-
-      historyCard.insertBefore(item, historyCard.firstChild);
+      // 重新渲染紀錄列表
+      renderHistoryList();
     }
 
     // ===== 調整總點數 + 聯動本日小計 + 記錄備註 =====
@@ -748,7 +895,7 @@
       // 更新 header / 兌換頁面的顯示
       renderCurrentKid();
 
-      // 更新本日小計
+      // 更新本日小計（用 state）
       updateTodaySummary(realDelta);
 
       // 取得備註
@@ -775,10 +922,52 @@
       });
     }
 
+    // 兌換確認：扣除目前小孩的總點數，並寫入紀錄
+    function handleRedeemConfirm() {
+      var kid = kidsState[currentKid];
+      if (!kid) return;
+      if (!redeemPointsInput) return;
+
+      var name = redeemNameInput ? redeemNameInput.value.trim() : '';
+      var ptsRaw = redeemPointsInput.value.trim();
+      var pts = parseInt(ptsRaw, 10);
+      if (!pts || pts <= 0) {
+        alert('請輸入要扣除的「點數」，必須是正整數');
+        return;
+      }
+
+      if (kid.totalPoints < pts) {
+        alert('點數不足，無法兌換這個獎勵');
+        return;
+      }
+
+      // 扣除點數
+      kid.totalPoints = kid.totalPoints - pts;
+      renderCurrentKid();
+
+      var note = redeemNoteInput ? redeemNoteInput.value.trim() : '';
+      var reason = '兌換：' + (name || '未命名獎勵');
+      if (note) {
+        reason += '（' + note + '）';
+      }
+
+      appendHistoryItem(-pts, reason, '兌換');
+
+      // 清空輸入欄位
+      if (redeemNameInput) redeemNameInput.value = '';
+      redeemPointsInput.value = '';
+      if (redeemNoteInput) redeemNoteInput.value = '';
+    }
+
+    if (redeemConfirmBtn) {
+      redeemConfirmBtn.addEventListener('click', handleRedeemConfirm);
+    }
+
     // ===== 初始化 =====
     function init() {
       renderCurrentKid();
-      highlightTodayColumn();
+      renderWeekTable();
+      renderHistoryList();
     }
 
     init();
