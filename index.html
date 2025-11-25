@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板</title>
+  <title>家用點數任務板 v2.3 (修復測試按鈕)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -92,7 +92,7 @@
       margin-top: 12px;
       display:flex;
       justify-content:space-between;
-      align-items:center;
+      align-items:flex-end;
       gap: 8px;
     }
     
@@ -107,9 +107,16 @@
       align-items: center;
       gap: 4px;
       border: 1px solid rgba(255,255,255,0.1);
+      align-self: center;
     }
     .date-chip:active { background: rgba(255,255,255,0.4); }
     .date-chip::after { content: "▾"; font-size: 12px; opacity: 0.8; }
+
+    .points-container {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
 
     .total-points {
       font-size: 26px;
@@ -118,6 +125,14 @@
       align-items:center;
       gap: 6px;
       white-space: nowrap;
+      line-height: 1.1;
+    }
+    
+    .weekly-points {
+        font-size: 13px;
+        opacity: 0.9;
+        margin-top: 2px;
+        font-weight: 500;
     }
 
     main {
@@ -272,6 +287,7 @@
       cursor: pointer;
       transition: all 0.2s;
     }
+    .delete-task-btn { color: #c62828; border-color: #ffcdd2; background: #ffebee; }
 
     .quick-row { display:flex; gap:10px; margin-top:6px; }
     .pill-btn {
@@ -302,6 +318,7 @@
       justify-content:space-around;
       border-top:1px solid #ddd;
       background:#fff;
+      padding-bottom: env(safe-area-inset-bottom);
     }
     .nav-item {
       flex:1;
@@ -389,6 +406,8 @@
       20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
       100% { transform: translate(-50%, 150%) scale(0.8); opacity: 0; }
     }
+    
+    .empty-state { text-align: center; color: #999; padding: 20px; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -409,9 +428,15 @@
       </div>
       <div class="header-bottom">
         <div class="date-chip" id="date-chip" onclick="openWeekSelectModal()">本週：-- / --</div>
-        <div class="total-points" id="total-points">
-          <span>⭐</span>
-          <span>0 點</span>
+        <div class="points-container">
+            <div class="total-points" id="total-points">
+              <span>⭐</span>
+              <span>0 點</span>
+            </div>
+            <!-- 新增：本週點數 -->
+            <div class="weekly-points" id="weekly-points">
+                本週：0 點
+            </div>
         </div>
       </div>
     </header>
@@ -427,8 +452,8 @@
         <div class="card" id="quick-points-card">
           <div class="small-label">調整今天的點數（也會影響總點數）</div>
           <div class="quick-row">
-            <button class="pill-btn pill-plus" type="button">+1 點</button>
-            <button class="pill-btn pill-minus" type="button">-1 點</button>
+            <button class="pill-btn pill-plus" type="button" onclick="handleQuickAdd(1)">+1 點</button>
+            <button class="pill-btn pill-minus" type="button" onclick="handleQuickAdd(-1)">-1 點</button>
           </div>
           <div class="small-label">備註（選填，記錄原因）</div>
           <input class="small-input" id="quick-note-input" placeholder="例：今天主動幫忙收玩具 +1 點" />
@@ -467,7 +492,7 @@
       </section>
 
       <section class="tab-page" data-tab="history">
-        <h2>近期點數紀錄</h2>
+        <h2>近期點數紀錄 <span id="history-week-label" style="font-size:14px; color:#666; font-weight:normal;"></span></h2>
         <div class="card" id="points-history-card"></div>
       </section>
 
@@ -509,16 +534,25 @@
             </div>
             <button id="btn-add-rule" class="settings-btn" style="margin-top: 10px;">新增</button>
           </div>
-          
+           
           <div class="settings-item">
-             <div class="settings-sub" style="color:#888; font-size:13px; line-height:1.4;">
-               說明：系統會根據完成的任務數量，取符合條件中「點數最高」的規則來計算本日小計。
-             </div>
+              <div class="settings-sub" style="color:#888; font-size:13px; line-height:1.4;">
+                說明：系統會根據完成的任務數量，取符合條件中「點數最高」的規則來計算本日小計。
+                <br><strong>注意：修改規則不會影響過去已獲得的分數。</strong>
+              </div>
           </div>
         </div>
 
         <h2>資料選項</h2>
         <div class="card settings-group">
+           <div class="settings-item">
+            <div>
+              <div class="settings-label" style="color:#1565c0;">🛠 產生測試資料</div>
+              <div class="settings-sub">隨機產生前兩週的任務紀錄(供測試用)。</div>
+            </div>
+            <button id="test-data-btn" class="settings-btn" type="button" style="color:#1565c0;border-color:#bbdefb;">測試</button>
+          </div>
+          
           <div class="settings-item">
             <div>
               <div class="settings-label" style="color:#c62828;">重置所有資料</div>
@@ -710,7 +744,8 @@
 
     var currentViewWeekKey = getCurrentWeekKey();
 
-    var STORAGE_KEY = 'family_points_data_v9'; 
+    // 更新 Key 以區隔舊版本 (因為資料結構變了)
+    var STORAGE_KEY = 'family_points_data_v11'; 
     
     var defaultRules = [
       { threshold: 3, points: 2 }, 
@@ -758,6 +793,28 @@
         }
     }
 
+    // 核心工具：根據目前的規則，計算某天狀態應該得幾分
+    function computeRuleScoreForDay(dayStatus) {
+        var checkedCount = 0;
+        Object.values(dayStatus || {}).forEach(status => {
+            if (status === 'checked') checkedCount++;
+        });
+        
+        var score = 0;
+        var maxPoints = 0;
+        var matched = false;
+        rulesState.forEach(function(rule) {
+            if (checkedCount >= rule.threshold) {
+                if (rule.points > maxPoints) {
+                    maxPoints = rule.points;
+                    matched = true;
+                }
+            }
+        });
+        if (matched) score = maxPoints;
+        return score;
+    }
+
     function loadData() {
       var raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -767,16 +824,24 @@
           if (data.kids) {
              Object.keys(data.kids).forEach(k => {
                  var kid = data.kids[k];
-                 if((kid.weeklyStatus || kid.dailySummary) && !kid.dataByWeek) {
-                     kid.dataByWeek = {};
-                     var thisWeek = getCurrentWeekKey();
-                     kid.dataByWeek[thisWeek] = {
-                         status: kid.weeklyStatus || [{},{},{},{},{},{},{}],
-                         summary: kid.dailySummary || [0,0,0,0,0,0,0]
-                     };
-                     delete kid.weeklyStatus; delete kid.dailySummary;
-                 }
+                 // 確保 dataByWeek 存在
                  if(!kid.dataByWeek) kid.dataByWeek = {};
+                 
+                 // 資料遷移：確保每一週都有 ruleScores 欄位
+                 Object.keys(kid.dataByWeek).forEach(weekKey => {
+                     var weekData = kid.dataByWeek[weekKey];
+                     // 防呆：確保 status 陣列存在
+                     if(!weekData.status) weekData.status = [{},{},{},{},{},{},{}];
+                     
+                     if (!weekData.ruleScores) {
+                         // 舊資料沒有 ruleScores，我們根據目前的規則算一次並「凍結」起來
+                         weekData.ruleScores = [0,0,0,0,0,0,0];
+                         for(var i=0; i<7; i++) {
+                             weekData.ruleScores[i] = computeRuleScoreForDay(weekData.status[i]);
+                         }
+                     }
+                 });
+                 
                  if (!kid.tasks) kid.tasks = JSON.parse(JSON.stringify(legacyTasks));
              });
              kidsState = data.kids;
@@ -798,6 +863,62 @@
       showToast('資料已重置');
     }
     
+    // 測試資料生成 (修復版)
+    function handleTestDataGen() {
+        if(!confirm('這將會為目前的小孩「隨機產生前兩週的任務數據」，方便測試週次切換。確定嗎？')) return;
+        
+        var kid = kidsState[currentKid];
+        var today = new Date();
+        var addedPoints = 0;
+
+        // 生成前兩週的數據
+        for(var w=1; w<=2; w++) {
+            var pastDate = new Date(today);
+            pastDate.setDate(today.getDate() - (w*7));
+            var monday = getMonday(pastDate);
+            var key = formatDateKey(monday);
+            
+            // 初始化該週
+            if(!kid.dataByWeek[key]) {
+                kid.dataByWeek[key] = {
+                    status: [{},{},{},{},{},{},{}],
+                    summary: [0,0,0,0,0,0,0],
+                    ruleScores: [0,0,0,0,0,0,0]
+                };
+            }
+            
+            var weekData = kid.dataByWeek[key];
+            // 防呆初始化
+            if(!weekData.status) weekData.status = [{},{},{},{},{},{},{}];
+            if(!weekData.ruleScores) weekData.ruleScores = [0,0,0,0,0,0,0];
+            
+            // 隨機填入
+            for(var day=0; day<7; day++) {
+                var oldScore = weekData.ruleScores[day];
+                
+                // 隨機勾選任務
+                kid.tasks.forEach(task => {
+                    if(Math.random() > 0.4) { // 60% 機率完成
+                        if(!weekData.status[day]) weekData.status[day] = {};
+                        weekData.status[day][task.id] = 'checked';
+                    }
+                });
+
+                // 計算新分數並儲存
+                var newScore = computeRuleScoreForDay(weekData.status[day]);
+                weekData.ruleScores[day] = newScore;
+                
+                // 累加總分差異
+                addedPoints += (newScore - oldScore);
+            }
+        }
+        
+        kid.totalPoints += addedPoints;
+        saveData();
+        renderAll();
+        showToast('已生成測試資料，請點擊上方日期切換週次');
+    }
+    
     function renderAll() {
         renderCurrentKid();
         renderWeekTable();
@@ -813,8 +934,10 @@
     var avatarEl = document.querySelector('.avatar');
     var kidSubEl = document.querySelector('.kid-sub');
     var totalPointsEl = document.getElementById('total-points');
+    var weeklyPointsEl = document.getElementById('weekly-points');
     var dateChipEl = document.getElementById('date-chip');
     var viewLabelEl = document.getElementById('viewing-week-label'); 
+    var historyWeekLabel = document.getElementById('history-week-label');
     var settingsTaskKidLabel = document.getElementById('settings-task-kid-label'); 
 
     var redeemKidNameEl = document.getElementById('redeem-kid-name');
@@ -824,8 +947,6 @@
     var redeemNoteInput = document.getElementById('redeem-note-input');
     var redeemConfirmBtn = document.getElementById('redeem-confirm-btn');
     
-    var quickPlusBtn = document.querySelector('#quick-points-card .pill-plus');
-    var quickMinusBtn = document.querySelector('#quick-points-card .pill-minus');
     var quickNoteInput = document.getElementById('quick-note-input');
     var historyCard = document.getElementById('points-history-card');
     
@@ -846,6 +967,7 @@
     var btnCancelEdit = document.getElementById('btn-cancel-edit');
     var btnSaveEdit = document.getElementById('btn-save-edit');
     var resetDataBtn = document.getElementById('reset-data-btn');
+    var testDataBtn = document.getElementById('test-data-btn');
     var weekSelectModal = document.getElementById('week-select-modal');
     var weekListContainer = document.getElementById('week-list-container');
 
@@ -868,6 +990,11 @@
       });
     }
 
+    // 修復：使用 addEventListener 綁定測試按鈕，避免 onclick 失效
+    if (testDataBtn) {
+        testDataBtn.addEventListener('click', handleTestDataGen);
+    }
+
     function formatDailySummary(value) { return (value >= 0 ? '+' : '') + value; }
     function getTodayColumnIndex() {
       var d = new Date().getDay();
@@ -878,34 +1005,34 @@
         if(!kid.dataByWeek[weekKey]) {
             kid.dataByWeek[weekKey] = {
                 status: [{},{},{},{},{},{},{}],
-                summary: [0,0,0,0,0,0,0]
+                summary: [0,0,0,0,0,0,0],
+                ruleScores: [0,0,0,0,0,0,0] // 新增：儲存該日符合規則的分數
             };
         }
         return kid.dataByWeek[weekKey];
     }
 
+    // 計算當日總分 (讀取已凍結的 ruleScores + 手動增減)
     function calculateDailyTotal(kid, weekKey, dayIndex) {
       var weekData = getWeekData(kid, weekKey);
-      var dayStatus = weekData.status[dayIndex] || {};
-      var checkedCount = 0;
-      Object.values(dayStatus).forEach(status => {
-          if (status === 'checked') checkedCount++;
-      });
       
-      var rulePoints = 0;
-      var maxPoints = 0;
-      var matched = false;
-      rulesState.forEach(function(rule) {
-        if (checkedCount >= rule.threshold) {
-          if (rule.points > maxPoints) {
-            maxPoints = rule.points;
-            matched = true;
-          }
-        }
-      });
-      if (matched) rulePoints = maxPoints;
+      // 如果沒有 ruleScores (舊資料)，則補算並存入
+      if (!weekData.ruleScores) {
+          weekData.ruleScores = [0,0,0,0,0,0,0];
+      }
+      
+      var ruleScore = weekData.ruleScores[dayIndex] || 0;
       var manualPoints = weekData.summary[dayIndex] || 0;
-      return rulePoints + manualPoints;
+      return ruleScore + manualPoints;
+    }
+
+    // 計算本週表格內的總分
+    function calculateWeeklyGridPoints(kid, weekKey) {
+        let total = 0;
+        for (let i = 0; i < 7; i++) {
+            total += calculateDailyTotal(kid, weekKey, i);
+        }
+        return total;
     }
 
     function renderCurrentKid() {
@@ -916,14 +1043,21 @@
         appEl.classList.remove('boy', 'girl');
         appEl.classList.add(kid.theme);
         totalPointsEl.innerHTML = '<span>⭐</span><span>' + kid.totalPoints + ' 點</span>';
+        
+        // 渲染本週點數
+        const weeklyScore = calculateWeeklyGridPoints(kid, currentViewWeekKey);
+        weeklyPointsEl.textContent = `本週：${weeklyScore} 點`;
+
         dateChipEl.textContent = '週次：' + getWeekRangeString(currentViewWeekKey);
         var thisWeek = getCurrentWeekKey();
         if(currentViewWeekKey === thisWeek) {
             viewLabelEl.textContent = "(本週)";
             viewLabelEl.style.color = "#2e7d32";
+            historyWeekLabel.textContent = "(本週)";
         } else {
             viewLabelEl.textContent = "(歷史紀錄)";
             viewLabelEl.style.color = "#c62828";
+            historyWeekLabel.textContent = `(${getWeekRangeString(currentViewWeekKey)})`;
         }
         redeemKidNameEl.textContent = kid.displayName;
         redeemKidPointsEl.textContent = kid.totalPoints;
@@ -931,398 +1065,554 @@
     }
 
     function renderWeekTable() {
-      var container = document.getElementById('week-table');
-      if (!container) return;
-      container.innerHTML = '';
-      var weekDays = ['一', '二', '三', '四', '五', '六', '日'];
-      var mondayDate = new Date(currentViewWeekKey);
-      var dates = [];
-      for(var i=0; i<7; i++) {
-          var d = new Date(mondayDate);
-          d.setDate(mondayDate.getDate() + i);
-          dates.push((d.getMonth()+1) + '/' + d.getDate());
-      }
-      var headerRow = document.createElement('div');
-      headerRow.className = 'week-header';
-      var taskHeader = document.createElement('div');
-      taskHeader.className = 'task-name-header';
-      taskHeader.textContent = '任務';
-      headerRow.appendChild(taskHeader);
-      weekDays.forEach((label, idx) => {
-        var cell = document.createElement('div');
-        cell.className = 'day-header';
-        cell.setAttribute('data-day-index', idx);
-        cell.innerHTML = `<div>${label}</div><div class="date-label">${dates[idx]}</div>`;
-        headerRow.appendChild(cell);
-      });
-      container.appendChild(headerRow);
-      var summaryRow = document.createElement('div');
-      summaryRow.className = 'day-summary-row';
-      var summaryName = document.createElement('div');
-      summaryName.className = 'task-name-summary';
-      summaryName.textContent = '本日小計';
-      summaryRow.appendChild(summaryName);
-      var kid = kidsState[currentKid];
-      for (var i = 0; i < 7; i++) {
-        var total = calculateDailyTotal(kid, currentViewWeekKey, i);
-        var cell = document.createElement('div');
-        cell.className = 'day-summary-cell';
-        cell.setAttribute('data-day-index', i);
-        cell.textContent = formatDailySummary(total);
-        if (total > 0) cell.classList.add('day-summary-cell-positive');
-        else if (total < 0) cell.classList.add('day-summary-cell-negative');
-        summaryRow.appendChild(cell);
-      }
-      container.appendChild(summaryRow);
-      var currentTasks = kid.tasks || [];
-      var weekData = getWeekData(kid, currentViewWeekKey);
-      currentTasks.forEach(function(task) {
-        var row = document.createElement('div');
-        row.className = 'task-row';
-        var nameDiv = document.createElement('div');
-        nameDiv.className = 'task-name';
-        nameDiv.textContent = task.name;
-        row.appendChild(nameDiv);
-        [0, 1, 2, 3, 4, 5, 6].forEach(function(i) {
-          var wrapper = document.createElement('div');
-          wrapper.className = 'day-cell-wrapper';
-          wrapper.setAttribute('data-day-index', i);
-          var checkDiv = document.createElement('div');
-          checkDiv.className = 'custom-check';
-          var status = (weekData.status[i]) ? weekData.status[i][task.id] : undefined;
-          if (status === 'checked') { checkDiv.classList.add('checked'); checkDiv.textContent = '✔'; }
-          else if (status === 'crossed') { checkDiv.classList.add('crossed'); checkDiv.textContent = '✘'; }
-          else { checkDiv.textContent = ''; }
-          checkDiv.onclick = function() { handleTaskClick(i, task.id); };
-          wrapper.appendChild(checkDiv);
-          row.appendChild(wrapper);
+        var kid = kidsState[currentKid];
+        var table = document.getElementById('week-table');
+        table.innerHTML = '';
+        var weekData = getWeekData(kid, currentViewWeekKey);
+
+        var days = ['一','二','三','四','五','六','日'];
+        var todayIdx = getTodayColumnIndex();
+        var isCurrentWeek = (currentViewWeekKey === getCurrentWeekKey());
+
+        // Header Row
+        var headerRow = document.createElement('div');
+        headerRow.className = 'week-header';
+        
+        var corner = document.createElement('div');
+        corner.className = 'task-name-header';
+        corner.textContent = '任務 / 星期';
+        headerRow.appendChild(corner);
+
+        // 計算此週的日期數字
+        var mondayDate = new Date(currentViewWeekKey);
+
+        days.forEach(function(d, i) {
+            var cell = document.createElement('div');
+            cell.className = 'day-header';
+            if (isCurrentWeek && i === todayIdx) cell.classList.add('today-col');
+            
+            // 日期計算
+            var thisDay = new Date(mondayDate);
+            thisDay.setDate(mondayDate.getDate() + i);
+            var dateStr = (thisDay.getMonth()+1) + '/' + thisDay.getDate();
+
+            cell.innerHTML = `<div>${d}</div><div class="date-label">${dateStr}</div>`;
+            headerRow.appendChild(cell);
         });
-        container.appendChild(row);
-      });
-      if(currentViewWeekKey === getCurrentWeekKey()) highlightTodayColumn();
-    }
-    
-    function highlightTodayColumn() {
-        var idx = getTodayColumnIndex();
-        var headers = document.querySelectorAll('.day-header[data-day-index="'+idx+'"]');
-        var cells = document.querySelectorAll('.day-cell-wrapper[data-day-index="'+idx+'"]');
-        var summary = document.querySelectorAll('.day-summary-cell[data-day-index="'+idx+'"]');
-        headers.forEach(el => el.classList.add('today-col'));
-        cells.forEach(el => el.classList.add('today-col'));
-        summary.forEach(el => el.classList.add('today-col'));
-        var wrapper = document.querySelector('.week-wrapper');
-        var targetCell = headers[0];
-        if (wrapper && targetCell) {
-            var scrollLeft = targetCell.offsetLeft - wrapper.offsetLeft - (wrapper.clientWidth / 2) + (targetCell.clientWidth / 2);
-            wrapper.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+        table.appendChild(headerRow);
+
+        // Task Rows
+        kid.tasks.forEach(function(task) {
+            var row = document.createElement('div');
+            row.className = 'task-row';
+
+            var nameCell = document.createElement('div');
+            nameCell.className = 'task-name';
+            nameCell.textContent = task.name;
+            // 長按刪除任務
+            var pressTimer;
+            nameCell.addEventListener('touchstart', function(){
+                pressTimer = setTimeout(function(){
+                    if(confirm('要刪除任務「'+task.name+'」嗎？(不會影響歷史分數)')) {
+                        deleteTask(task.id);
+                    }
+                }, 800);
+            });
+            nameCell.addEventListener('touchend', function(){ clearTimeout(pressTimer); });
+            row.appendChild(nameCell);
+
+            for (var i=0; i<7; i++) {
+                var cellWrapper = document.createElement('div');
+                cellWrapper.className = 'day-cell-wrapper';
+                if (isCurrentWeek && i === todayIdx) cellWrapper.classList.add('today-col');
+
+                var check = document.createElement('div');
+                var status = (weekData.status[i] && weekData.status[i][task.id]) ? weekData.status[i][task.id] : '';
+                
+                check.className = 'custom-check ' + (status === 'checked' ? 'checked' : (status === 'crossed' ? 'crossed' : ''));
+                check.textContent = status === 'checked' ? '✔' : (status === 'crossed' ? '✖' : '');
+                
+                (function(dIndex, taskId) {
+                    check.onclick = function() {
+                        toggleCheck(dIndex, taskId);
+                    };
+                })(i, task.id);
+
+                cellWrapper.appendChild(check);
+                row.appendChild(cellWrapper);
+            }
+            table.appendChild(row);
+        });
+
+        // Summary Row (Daily Points)
+        var sumRow = document.createElement('div');
+        sumRow.className = 'day-summary-row';
+        var sumTitle = document.createElement('div');
+        sumTitle.className = 'task-name-summary';
+        sumTitle.textContent = '本日小計';
+        sumRow.appendChild(sumTitle);
+
+        for (var i=0; i<7; i++) {
+            var cell = document.createElement('div');
+            cell.className = 'day-summary-cell';
+            if (isCurrentWeek && i === todayIdx) cell.classList.add('today-col');
+            
+            var dailyTotal = calculateDailyTotal(kid, currentViewWeekKey, i);
+            
+            // 移除每日加減按鈕，只顯示分數
+            var scoreSpan = document.createElement('span');
+            scoreSpan.textContent = (dailyTotal > 0 ? '+' : '') + dailyTotal;
+            if(dailyTotal > 0) scoreSpan.className = 'day-summary-cell-positive';
+            if(dailyTotal < 0) scoreSpan.className = 'day-summary-cell-negative';
+            
+            cell.appendChild(scoreSpan);
+            sumRow.appendChild(cell);
         }
+        table.appendChild(sumRow);
     }
 
-    function handleTaskClick(dayIndex, taskId) {
-      var kid = kidsState[currentKid];
-      var weekData = getWeekData(kid, currentViewWeekKey);
-      if (!weekData.status[dayIndex]) weekData.status[dayIndex] = {};
-      var currentStatus = weekData.status[dayIndex][taskId]; 
-      var oldDailyTotal = calculateDailyTotal(kid, currentViewWeekKey, dayIndex);
-      if (!currentStatus) weekData.status[dayIndex][taskId] = 'checked';
-      else if (currentStatus === 'checked') weekData.status[dayIndex][taskId] = 'crossed';
-      else delete weekData.status[dayIndex][taskId];
-      var newDailyTotal = calculateDailyTotal(kid, currentViewWeekKey, dayIndex);
-      var diff = newDailyTotal - oldDailyTotal;
-      if (diff !== 0) {
-        kid.totalPoints += diff;
-        if (kid.totalPoints < 0) kid.totalPoints = 0;
-      }
-      saveData(); renderWeekTable(); renderCurrentKid();
+    function toggleCheck(dayIndex, taskId) {
+        var kid = kidsState[currentKid];
+        var weekData = getWeekData(kid, currentViewWeekKey);
+        
+        // 1. 先取得變動前的規則分數
+        var oldRuleScore = weekData.ruleScores[dayIndex] || 0;
+        
+        // 2. 更新勾選狀態
+        var current = (weekData.status[dayIndex] && weekData.status[dayIndex][taskId]) ? weekData.status[dayIndex][taskId] : '';
+        var next = '';
+        if (current === '') next = 'checked';
+        else if (current === 'checked') next = 'crossed';
+        else next = '';
+
+        if (!weekData.status[dayIndex]) weekData.status[dayIndex] = {};
+        weekData.status[dayIndex][taskId] = next;
+
+        // 3. 根據「目前最新的規則」計算新的規則分數，並存回去 (Frozen)
+        var newRuleScore = computeRuleScoreForDay(weekData.status[dayIndex]);
+        weekData.ruleScores[dayIndex] = newRuleScore;
+
+        // 4. 更新總分
+        var diff = newRuleScore - oldRuleScore;
+
+        if (diff !== 0) {
+            kid.totalPoints += diff;
+            if(diff > 0) {
+                showCoinAnimation();
+                playCoinSound();
+            } else {
+                showDeductAnimation();
+                playDeductSound(); 
+            }
+        }
+
+        saveData();
+        renderCurrentKid();
+        renderWeekTable();
     }
 
-    // ===== Settings Logic =====
-    function renderSettingsKidList() {
-      if (!settingsKidListEl) return;
-      settingsKidListEl.innerHTML = '';
-      Object.keys(kidsState).forEach(function(key) {
-        var kid = kidsState[key];
-        var item = document.createElement('div');
-        item.className = 'settings-item';
-        var infoDiv = document.createElement('div');
-        var nameDiv = document.createElement('div');
-        nameDiv.className = 'settings-label';
-        nameDiv.textContent = kid.displayName;
-        var subDiv = document.createElement('div');
-        subDiv.className = 'settings-sub';
-        var themeName = kid.theme === 'boy' ? '藍色' : '粉色';
-        subDiv.textContent = '代表顏色：' + themeName + ' · 總點數 ' + kid.totalPoints;
-        infoDiv.appendChild(nameDiv); infoDiv.appendChild(subDiv);
-        var btn = document.createElement('button');
-        btn.className = 'settings-btn';
-        btn.textContent = '編輯';
-        btn.type = 'button';
-        btn.addEventListener('click', function() { openEditKidModal(key); });
-        item.appendChild(infoDiv); item.appendChild(btn);
-        settingsKidListEl.appendChild(item);
-      });
+    // 注意：原本的 adjustDailySummary 函式仍然保留在程式碼中，
+    // 以防資料結構需要存取，但已從 UI 中移除呼叫入口。
+    function adjustDailySummary(dayIndex, val) {
+        var kid = kidsState[currentKid];
+        var weekData = getWeekData(kid, currentViewWeekKey);
+        
+        weekData.summary[dayIndex] = (weekData.summary[dayIndex] || 0) + val;
+        kid.totalPoints += val;
+        saveData();
+        renderCurrentKid();
+        renderWeekTable();
     }
 
-    function renderSettingsTaskList() {
-      if (!settingsTaskListEl) return;
-      settingsTaskListEl.innerHTML = ''; 
-      var currentTasks = kidsState[currentKid].tasks || [];
-      currentTasks.forEach(function(task) {
-        var item = document.createElement('div');
-        item.className = 'settings-item';
-        var infoDiv = document.createElement('div');
-        var nameDiv = document.createElement('div');
-        nameDiv.className = 'settings-label';
-        nameDiv.textContent = task.name;
-        var subDiv = document.createElement('div');
-        subDiv.className = 'settings-sub';
-        subDiv.textContent = '顯示在本週任務表';
-        infoDiv.appendChild(nameDiv); infoDiv.appendChild(subDiv);
-        var btn = document.createElement('button');
-        btn.className = 'settings-btn';
-        btn.textContent = '刪除';
-        btn.type = 'button';
-        btn.addEventListener('click', function() {
-          if (btn.textContent !== '確定？') {
-             btn.textContent = '確定？'; btn.style.color = '#c62828';
-             setTimeout(function(){ if(btn.parentElement) { btn.textContent = '刪除'; btn.style.color = ''; } }, 3000);
-           } else { handleDeleteTask(task.id); }
+    function handleQuickAdd(val) {
+        var kid = kidsState[currentKid];
+        var note = quickNoteInput.value.trim();
+        
+        kid.totalPoints += val;
+        kid.history.push({
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            item: '快速加扣',
+            delta: val,
+            note: note || (val > 0 ? '手動加點' : '手動扣點')
         });
-        item.appendChild(infoDiv); item.appendChild(btn);
-        settingsTaskListEl.appendChild(item);
-      });
+
+        quickNoteInput.value = '';
+        if (val > 0) {
+            showCoinAnimation();
+            playCoinSound();
+            showToast('加點成功！');
+        } else {
+            showDeductAnimation();
+            playDeductSound();
+            showToast('已扣點');
+        }
+        
+        saveData();
+        renderAll();
     }
 
-    function handleAddTask() {
-      if (!settingsNewTaskInput) return;
-      var val = settingsNewTaskInput.value.trim();
-      if (!val) { showToast('請輸入任務名稱'); return; }
-      var currentTasks = kidsState[currentKid].tasks;
-      currentTasks.push({ id: 't_' + Date.now(), name: val });
-      settingsNewTaskInput.value = '';
-      saveData(); renderAll(); showToast('任務已新增');
-    }
-    function handleDeleteTask(taskId) {
-        var currentTasks = kidsState[currentKid].tasks;
-        kidsState[currentKid].tasks = currentTasks.filter(t => t.id !== taskId);
-        saveData(); renderAll(); showToast('任務已刪除');
-    }
-    if(settingsNewTaskBtn) settingsNewTaskBtn.addEventListener('click', handleAddTask);
+    redeemConfirmBtn.addEventListener('click', function() {
+        var name = redeemNameInput.value.trim();
+        var pts = parseInt(redeemPointsInput.value);
+        var note = redeemNoteInput.value.trim();
+        var kid = kidsState[currentKid];
 
-    // --- Rules Logic (Fixed) ---
-    function renderSettingsRulesList() {
-        if (!settingsRulesListEl) return;
-        settingsRulesListEl.innerHTML = '';
-        rulesState.sort((a,b) => a.threshold - b.threshold);
+        if (!name || isNaN(pts) || pts <= 0) {
+            alert('請輸入有效的兌換名稱和點數');
+            return;
+        }
+        if (kid.totalPoints < pts) {
+            if(!confirm('點數不足，確定要兌換並變成負分嗎？')) return;
+        }
 
-        rulesState.forEach((rule, index) => {
+        kid.totalPoints -= pts;
+        kid.history.push({
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            item: '兌換：' + name,
+            delta: -pts,
+            note: note
+        });
+
+        redeemNameInput.value = '';
+        redeemPointsInput.value = '';
+        redeemNoteInput.value = '';
+        
+        showDeductAnimation();
+        playDeductSound();
+        showToast('兌換成功！');
+        saveData();
+        renderAll();
+    });
+
+    function renderHistoryList() {
+        var kid = kidsState[currentKid];
+        historyCard.innerHTML = '';
+        
+        var viewMonday = new Date(currentViewWeekKey);
+        var viewNextMonday = new Date(viewMonday);
+        viewNextMonday.setDate(viewMonday.getDate() + 7);
+
+        // 過濾
+        var filteredHistory = kid.history.filter(function(item) {
+            var itemDate = new Date(item.date);
+            return itemDate.getTime() >= viewMonday.getTime() && 
+                   itemDate.getTime() < viewNextMonday.getTime();
+        });
+
+        // 排序：新的在上面
+        var list = filteredHistory.sort(function(a,b){ return b.id - a.id; });
+
+        if (list.length === 0) {
+            historyCard.innerHTML = '<div class="empty-state">本週尚無額外紀錄</div>';
+            return;
+        }
+
+        list.forEach(function(h) {
+            var row = document.createElement('div');
+            row.className = 'history-item';
+            
+            var left = document.createElement('div');
+            left.className = 'history-main';
+            var titleDiv = document.createElement('div');
+            titleDiv.style.fontWeight = '600';
+            titleDiv.textContent = h.item;
+            
+            var metaDiv = document.createElement('div');
+            metaDiv.className = 'history-date';
+            var metaText = h.date;
+            if(h.note) metaText += ' · ' + h.note;
+            metaDiv.textContent = metaText;
+            
+            left.appendChild(titleDiv);
+            left.appendChild(metaDiv);
+
+            var right = document.createElement('div');
+            right.style.textAlign = 'right';
+            
+            var deltaDiv = document.createElement('div');
+            deltaDiv.className = 'history-delta';
+            deltaDiv.textContent = (h.delta > 0 ? '+' : '') + h.delta;
+            deltaDiv.style.color = h.delta > 0 ? '#2e7d32' : '#c62828';
+            
+            var delBtn = document.createElement('button');
+            delBtn.className = 'history-delete-btn';
+            delBtn.textContent = '刪除';
+            delBtn.onclick = function() {
+                if(confirm('確定刪除這條紀錄？點數會復原。')) {
+                    deleteHistoryItem(h.id, h.delta);
+                }
+            };
+
+            right.appendChild(deltaDiv);
+            right.appendChild(delBtn);
+            
+            row.appendChild(left);
+            row.appendChild(right);
+            historyCard.appendChild(row);
+        });
+    }
+
+    function deleteHistoryItem(id, delta) {
+        var kid = kidsState[currentKid];
+        kid.history = kid.history.filter(x => x.id !== id);
+        kid.totalPoints -= delta; // 復原分數
+        saveData();
+        renderAll();
+        showToast('紀錄已刪除');
+    }
+
+    // --- Settings / Tasks ---
+    function renderSettingsTaskList() {
+        var kid = kidsState[currentKid];
+        settingsTaskListEl.innerHTML = '';
+        kid.tasks.forEach(function(t) {
+            var item = document.createElement('div');
+            item.className = 'settings-item';
+            item.innerHTML = '<div>' + t.name + '</div>';
+            
+            var delBtn = document.createElement('button');
+            delBtn.className = 'settings-btn delete-task-btn';
+            delBtn.textContent = '刪除';
+            delBtn.onclick = function() {
+                if(confirm('確定刪除「'+t.name+'」？這會從表格中移除此列。')) {
+                    deleteTask(t.id);
+                }
+            };
+            item.appendChild(delBtn);
+            settingsTaskListEl.appendChild(item);
+        });
+    }
+
+    function deleteTask(taskId) {
+        var kid = kidsState[currentKid];
+        kid.tasks = kid.tasks.filter(t => t.id !== taskId);
+        saveData();
+        renderAll();
+    }
+
+    settingsNewTaskBtn.addEventListener('click', function() {
+        var val = settingsNewTaskInput.value.trim();
+        if(!val) return;
+        var kid = kidsState[currentKid];
+        kid.tasks.push({ id: 't'+Date.now(), name: val });
+        settingsNewTaskInput.value = '';
+        saveData();
+        renderAll();
+        showToast('任務已新增');
+    });
+
+    // --- Settings / Kids ---
+    function renderSettingsKidList() {
+        settingsKidListEl.innerHTML = '';
+        Object.values(kidsState).forEach(function(k) {
             var item = document.createElement('div');
             item.className = 'settings-item';
             
             var infoDiv = document.createElement('div');
-            var labelDiv = document.createElement('div');
-            labelDiv.className = 'settings-label';
-            labelDiv.textContent = '規則 ' + (index + 1);
+            infoDiv.innerHTML = '<span style="font-weight:600">'+k.displayName+'</span> <span style="font-size:12px;color:#888">('+k.totalPoints+'點)</span>';
             
-            var subDiv = document.createElement('div');
-            subDiv.className = 'settings-sub';
-            subDiv.textContent = `完成 ≧ ${rule.threshold} 項任務 → 當天加 ${rule.points} 點`;
+            var btnDiv = document.createElement('div');
+            btnDiv.style.display = 'flex';
+            btnDiv.style.gap = '8px';
+
+            var editBtn = document.createElement('button');
+            editBtn.className = 'settings-btn';
+            editBtn.textContent = '編輯';
+            editBtn.onclick = function() { openEditKidModal(k.key); };
             
-            infoDiv.appendChild(labelDiv);
-            infoDiv.appendChild(subDiv);
+            btnDiv.appendChild(editBtn);
             
-            var btn = document.createElement('button');
-            btn.className = 'settings-btn';
-            btn.type = 'button';
-            btn.textContent = '刪除';
-            
-            btn.onclick = function() {
-                if(btn.textContent !== '確定？') {
-                    btn.textContent = '確定？';
-                    btn.style.color = '#c62828';
-                    btn.style.borderColor = '#c62828';
-                    setTimeout(function(){
-                        if(btn) {
-                            btn.textContent = '刪除';
-                            btn.style.color = '';
-                            btn.style.borderColor = '';
-                        }
-                    }, 3000);
-                } else {
-                    rulesState.splice(index, 1);
-                    saveData();
-                    renderAll(); 
-                    showToast('規則已刪除');
-                }
-            };
-            
+            // 只有當小孩數量大於1時才顯示刪除
+            if (Object.keys(kidsState).length > 1) {
+                var delBtn = document.createElement('button');
+                delBtn.className = 'settings-btn delete-task-btn';
+                delBtn.textContent = '刪除';
+                delBtn.onclick = function() {
+                    if (confirm('確定要刪除小孩「'+k.displayName+'」的所有資料？無法復原！')) {
+                        deleteKid(k.key);
+                    }
+                };
+                btnDiv.appendChild(delBtn);
+            }
+
             item.appendChild(infoDiv);
-            item.appendChild(btn);
-            settingsRulesListEl.appendChild(item);
+            item.appendChild(btnDiv);
+            settingsKidListEl.appendChild(item);
+        });
+
+        // 新增小孩按鈕
+        var addDiv = document.createElement('div');
+        addDiv.className = 'settings-item';
+        addDiv.style.justifyContent = 'center';
+        var addBtn = document.createElement('button');
+        addBtn.className = 'settings-btn';
+        addBtn.style.width = '100%';
+        addBtn.style.color = '#1565c0';
+        addBtn.style.fontWeight = '600';
+        addBtn.textContent = '+ 新增小孩';
+        addBtn.onclick = addNewKid;
+        addDiv.appendChild(addBtn);
+        settingsKidListEl.appendChild(addDiv);
+    }
+
+    function addNewKid() {
+        var newKey = 'kid_' + Date.now();
+        kidsState[newKey] = {
+            key: newKey,
+            displayName: '新寶貝',
+            avatar: '🙂',
+            slogan: '快樂每一天',
+            theme: 'boy',
+            totalPoints: 0,
+            dataByWeek: {},
+            history: [],
+            tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
+        };
+        saveData();
+        renderAll();
+        showToast('已新增小孩，請到編輯修改資料');
+    }
+
+    function deleteKid(key) {
+        delete kidsState[key];
+        // 如果刪除了當前正在看的小孩，切換到第一個
+        if (currentKid === key) {
+            currentKid = Object.keys(kidsState)[0];
+        }
+        saveData();
+        renderAll();
+    }
+
+    function openEditKidModal(key) {
+        var kid = kidsState[key];
+        editKidKeyInput.value = key;
+        editKidNameInput.value = kid.displayName;
+        editKidPointsInput.value = kid.totalPoints;
+        
+        var radios = document.getElementsByName('edit-kid-theme');
+        radios.forEach(r => {
+            if(r.value === kid.theme) r.checked = true;
+        });
+
+        editKidModal.classList.add('open');
+    }
+
+    btnCancelEdit.onclick = function() { editKidModal.classList.remove('open'); };
+    btnSaveEdit.onclick = function() {
+        var key = editKidKeyInput.value;
+        var kid = kidsState[key];
+        if(!kid) return;
+
+        kid.displayName = editKidNameInput.value.trim() || 'No Name';
+        kid.avatar = kid.displayName.charAt(0).toUpperCase();
+        kid.totalPoints = parseInt(editKidPointsInput.value) || 0;
+        
+        var radios = document.getElementsByName('edit-kid-theme');
+        radios.forEach(r => { if(r.checked) kid.theme = r.value; });
+
+        saveData();
+        renderAll();
+        editKidModal.classList.remove('open');
+        showToast('資料已更新');
+    };
+
+    // --- Settings / Rules ---
+    function renderSettingsRulesList() {
+        settingsRulesListEl.innerHTML = '';
+        rulesState.sort((a,b) => b.threshold - a.threshold).forEach((rule, idx) => {
+            var row = document.createElement('div');
+            row.className = 'settings-item';
+            row.innerHTML = `
+                <div>
+                   <span style="font-weight:600">完成 ${rule.threshold} 項</span>
+                   <span style="margin:0 8px">→</span>
+                   <span style="color:#2e7d32; font-weight:600">+${rule.points} 點</span>
+                </div>
+            `;
+            var delBtn = document.createElement('button');
+            delBtn.className = 'settings-btn delete-task-btn';
+            delBtn.textContent = '刪除';
+            delBtn.onclick = function() {
+                rulesState.splice(idx, 1);
+                saveData();
+                renderAll();
+            };
+            row.appendChild(delBtn);
+            settingsRulesListEl.appendChild(row);
         });
     }
 
-    function handleAddRule() {
-        var tVal = parseInt(ruleThresholdInput.value, 10);
-        var pVal = parseInt(rulePointsInput.value, 10);
+    btnAddRule.addEventListener('click', function() {
+        var t = parseInt(ruleThresholdInput.value);
+        var p = parseInt(rulePointsInput.value);
+        if(isNaN(t) || isNaN(p)) return;
         
-        if(isNaN(tVal) || tVal <= 0) { showToast('請輸入正確的項目數'); return; }
-        if(isNaN(pVal) || pVal <= 0) { showToast('請輸入正確的點數'); return; }
-        
-        var exists = rulesState.some(r => r.threshold === tVal);
-        if(exists) { showToast('已有相同項目數的規則'); return; }
-        
-        rulesState.push({ threshold: tVal, points: pVal });
+        rulesState.push({ threshold: t, points: p });
         ruleThresholdInput.value = '';
         rulePointsInput.value = '';
         saveData();
         renderAll();
         showToast('規則已新增');
-    }
-    if(btnAddRule) btnAddRule.addEventListener('click', handleAddRule);
+    });
 
+    // --- Switch Kid ---
+    switchBtn.addEventListener('click', function() {
+        var keys = Object.keys(kidsState);
+        var idx = keys.indexOf(currentKid);
+        var nextIdx = (idx + 1) % keys.length;
+        currentKid = keys[nextIdx];
+        renderAll();
+    });
 
+    // --- Week Select ---
     function openWeekSelectModal() {
         weekListContainer.innerHTML = '';
         var kid = kidsState[currentKid];
+        
+        // 找出所有有資料的週次 Key
+        var weeks = Object.keys(kid.dataByWeek).sort().reverse();
+        // 確保本週一定在列表裡
         var thisWeek = getCurrentWeekKey();
-        var weekKeys = Object.keys(kid.dataByWeek || {});
-        if(!weekKeys.includes(thisWeek)) weekKeys.push(thisWeek);
-        weekKeys.sort().reverse();
-        weekKeys.forEach(key => {
+        if (!weeks.includes(thisWeek)) {
+             weeks.unshift(thisWeek);
+        }
+        
+        // 去除重複並排序
+        weeks = [...new Set(weeks)].sort().reverse();
+
+        weeks.forEach(function(wk) {
             var div = document.createElement('div');
-            div.className = 'week-list-item';
-            if(key === currentViewWeekKey) div.classList.add('active');
-            var label = getWeekRangeString(key);
-            if(key === thisWeek) label += " (本週)";
+            div.className = 'week-list-item ' + (wk === currentViewWeekKey ? 'active' : '');
+            
+            var label = getWeekRangeString(wk);
+            if (wk === thisWeek) label += " (本週)";
+            
             div.textContent = label;
-            div.onclick = function() { currentViewWeekKey = key; renderAll(); closeWeekSelectModal(); };
+            div.onclick = function() {
+                currentViewWeekKey = wk;
+                closeWeekSelectModal();
+                renderAll();
+            };
             weekListContainer.appendChild(div);
         });
+        
         weekSelectModal.classList.add('open');
     }
-    function closeWeekSelectModal() { weekSelectModal.classList.remove('open'); }
-    
-    function addHistory(kid, desc, delta) {
-        var now = new Date();
-        var dateStr = (now.getMonth()+1) + '/' + now.getDate() + ' ' + now.getHours() + ':' + (now.getMinutes()<10?'0':'') + now.getMinutes();
-        kid.history.unshift({ desc: desc, delta: delta, date: dateStr, id: Date.now() });
-        if(kid.history.length > 50) kid.history.pop();
-    }
-    function renderHistoryList() {
-        var kid = kidsState[currentKid];
-        historyCard.innerHTML = '';
-        if (!kid.history || kid.history.length === 0) { historyCard.innerHTML = '<div style="color:#777;text-align:center;padding:10px;">尚無紀錄</div>'; return; }
-        kid.history.forEach(function(h, index) {
-            var item = document.createElement('div');
-            item.className = 'history-item';
-            var left = document.createElement('div');
-            left.className = 'history-main';
-            left.innerHTML = `<div>${h.desc}</div><div class="history-date">${h.date}</div>`;
-            var right = document.createElement('div');
-            right.style.textAlign = 'right';
-            var deltaDiv = document.createElement('div');
-            deltaDiv.className = 'history-delta';
-            var sign = h.delta > 0 ? '+' : '';
-            deltaDiv.textContent = sign + h.delta;
-            deltaDiv.style.color = h.delta > 0 ? '#2e7d32' : '#c62828';
-            var delBtn = document.createElement('button');
-            delBtn.className = 'history-delete-btn';
-            delBtn.textContent = '刪除';
-            delBtn.onclick = function() {
-                if(confirm('確定刪除這條紀錄？')) {
-                    kid.totalPoints -= h.delta;
-                    if(kid.totalPoints < 0) kid.totalPoints = 0;
-                    kid.history.splice(index, 1);
-                    saveData(); renderHistoryList(); renderCurrentKid();
-                }
-            };
-            right.appendChild(deltaDiv); right.appendChild(delBtn);
-            item.appendChild(left); item.appendChild(right);
-            historyCard.appendChild(item);
-        });
+    function closeWeekSelectModal() {
+        weekSelectModal.classList.remove('open');
     }
 
-    if(quickPlusBtn) {
-        quickPlusBtn.onclick = function() {
-            var kid = kidsState[currentKid];
-            var note = quickNoteInput.value.trim() || '快速加點';
-            playCoinSound(); showCoinAnimation();
-            kid.totalPoints += 1;
-            var todayIdx = getTodayColumnIndex(); 
-            var weekData = getWeekData(kid, currentViewWeekKey);
-            weekData.summary[todayIdx] = (weekData.summary[todayIdx] || 0) + 1;
-            addHistory(kid, note, 1);
-            quickNoteInput.value = '';
-            saveData(); renderAll();
-        };
+    // --- Init ---
+    function highlightTodayColumn() {
+        var todayIdx = getTodayColumnIndex();
+        // 簡單的視覺引導，如果想滑動到今天
+        // 但目前 CSS 已經用 .today-col 標示，這裡暫時留空
     }
-    if(quickMinusBtn) {
-        quickMinusBtn.onclick = function() {
-            var kid = kidsState[currentKid];
-            if(kid.totalPoints <= 0) { showToast('沒點數可扣囉'); return; }
-            var note = quickNoteInput.value.trim() || '快速扣點';
-            playDeductSound(); showDeductAnimation();
-            kid.totalPoints -= 1;
-            var todayIdx = getTodayColumnIndex();
-            var weekData = getWeekData(kid, currentViewWeekKey);
-            weekData.summary[todayIdx] = (weekData.summary[todayIdx] || 0) - 1;
-            addHistory(kid, note, -1);
-            quickNoteInput.value = '';
-            saveData(); renderAll();
-        };
-    }
-    if(redeemConfirmBtn) {
-        redeemConfirmBtn.onclick = function() {
-            var kid = kidsState[currentKid];
-            var name = redeemNameInput.value.trim();
-            var pts = parseInt(redeemPointsInput.value, 10);
-            var note = redeemNoteInput.value.trim();
-            if(!name) { showToast('請輸入兌換名稱'); return; }
-            if(isNaN(pts) || pts <= 0) { showToast('請輸入有效點數'); return; }
-            if(kid.totalPoints < pts) { showToast('點數不足！'); return; }
-            if(confirm('確定要兌換「'+name+'」並扣除 '+pts+' 點嗎？')) {
-                kid.totalPoints -= pts;
-                playDeductSound(); showDeductAnimation(); 
-                var desc = '兌換：' + name + (note ? (' ('+note+')') : '');
-                addHistory(kid, desc, -pts);
-                redeemNameInput.value = ''; redeemPointsInput.value = ''; redeemNoteInput.value = '';
-                saveData(); renderAll(); showToast('兌換成功！');
-            }
-        };
-    }
-    
-    function openEditKidModal(key) {
-      var kid = kidsState[key];
-      if (!kid) return;
-      editKidKeyInput.value = key;
-      editKidNameInput.value = kid.displayName;
-      editKidPointsInput.value = kid.totalPoints;
-      var radios = document.getElementsByName('edit-kid-theme');
-      for(var i=0; i<radios.length; i++) { if (radios[i].value === kid.theme) radios[i].checked = true; }
-      editKidModal.classList.add('open');
-    }
-    function closeEditKidModal() { editKidModal.classList.remove('open'); }
-    function saveKidEdit() {
-      var key = editKidKeyInput.value;
-      var kid = kidsState[key];
-      if (!kid) return;
-      var newName = editKidNameInput.value.trim();
-      var newPoints = parseInt(editKidPointsInput.value, 10);
-      if (!newName || isNaN(newPoints) || newPoints < 0) return;
-      var newTheme = 'boy';
-      var radios = document.getElementsByName('edit-kid-theme');
-      for(var i=0; i<radios.length; i++) { if (radios[i].checked) newTheme = radios[i].value; }
-      kid.displayName = newName; kid.totalPoints = newPoints; kid.theme = newTheme;
-      saveData(); renderAll(); closeEditKidModal(); showToast('儲存成功');
-    }
-    if (btnCancelEdit) btnCancelEdit.addEventListener('click', closeEditKidModal);
-    if (btnSaveEdit) btnSaveEdit.addEventListener('click', saveKidEdit);
-    
-    if(switchBtn) { switchBtn.addEventListener('click', function() { currentKid = (currentKid === 'leo') ? 'natasha' : 'leo'; renderAll(); }); }
 
-    // Init
-    loadData(); renderAll();
+    loadData();
+    renderAll();
   </script>
 </body>
 </html>
