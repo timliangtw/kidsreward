@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v4.2 (時區修復版)</title>
+  <title>家用點數任務板 v4.3 (輸入驗證版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -654,7 +654,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271450
+            v202511271536
         </div>
       </section>
     </main>
@@ -751,7 +751,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271530";
+    const APP_VERSION = "202511271536";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -855,6 +855,12 @@
                 alert("家庭代號至少需要 3 個字元");
                 return;
             }
+            // 驗證輸入內容：只允許英文、數字和減號
+            if (!/^[a-zA-Z0-9-]+$/.test(val)) {
+                alert("家庭代號只能包含英文、數字和減號 (-)，請勿使用空格或特殊符號");
+                return;
+            }
+
             // Save ID
             currentFamilyId = val;
             localStorage.setItem(FAMILY_ID_KEY, currentFamilyId);
