@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v3.2 (雲端寫入版)</title>
+  <title>家用點數任務板 v4.1 (修復登入循環)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -438,6 +438,62 @@
         padding: 10px 0 20px;
         font-family: monospace;
     }
+    
+    /* Family Login Modal Styles */
+    .login-modal-content {
+        text-align: center;
+        padding-top: 10px;
+    }
+    .login-logo {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    .login-desc {
+        color: #666;
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 1.5;
+    }
+    .login-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #ddd;
+        border-radius: 12px;
+        font-size: 18px;
+        text-align: center;
+        margin-bottom: 20px;
+        outline: none;
+        transition: border-color 0.3s;
+    }
+    .login-input:focus {
+        border-color: #4f8cf7;
+    }
+    .login-btn {
+        width: 100%;
+        background: #4f8cf7;
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 12px;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(79, 140, 247, 0.3);
+    }
+    .login-btn:active {
+        transform: scale(0.98);
+    }
+    
+    .family-id-tag {
+        display: inline-block;
+        background: #eee;
+        color: #555;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 11px;
+        margin-left: 4px;
+    }
   </style>
 </head>
 <body>
@@ -589,16 +645,16 @@
           
           <div class="settings-item">
             <div>
-              <div class="settings-label" style="color:#c62828;">重置所有資料</div>
-              <div class="settings-sub">清除所有紀錄，回到初始狀態。</div>
+              <div class="settings-label" style="color:#c62828;">重置/登出</div>
+              <div class="settings-sub">清除家庭代號與本地紀錄 (雲端資料保留)。</div>
             </div>
-            <button id="reset-data-btn" class="settings-btn" type="button" style="color:#c62828;border-color:#ffcdd2;">重置</button>
+            <button id="reset-data-btn" class="settings-btn" type="button" style="color:#c62828;border-color:#ffcdd2;">登出</button>
           </div>
         </div>
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271420
+            v202511271450
         </div>
       </section>
     </main>
@@ -664,6 +720,23 @@
         </div>
     </div>
     
+    <!-- 登入/設定 ID Modal -->
+    <div class="modal-overlay" id="login-modal" style="z-index:99999;">
+        <div class="modal" style="max-width:360px;">
+            <div class="login-modal-content">
+                <div class="login-logo">🏠</div>
+                <h3>歡迎使用家庭點數板</h3>
+                <p class="login-desc">
+                    請輸入一個獨特的<b>「家庭代號」</b><br>
+                    (例如: <code>wang-home-2025</code>)<br>
+                    其他家人輸入相同代號即可同步資料。
+                </p>
+                <input id="login-family-id" class="login-input" placeholder="請輸入家庭代號" />
+                <button id="login-btn" class="login-btn">開始使用</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- 特效元素 -->
     <div id="coin-effect" class="coin-effect">🪙</div>
     <div id="deduct-effect" class="deduct-effect">🔻</div>
@@ -672,14 +745,13 @@
 
   <script type="module">
     // -----------------------------------------------------------
-    // 1. Firebase 初始化 & Phase 3: Write Integration
+    // 1. Firebase 初始化 & Phase 4: Family ID Isolation
     // -----------------------------------------------------------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-    // 新增 deleteDoc 引入
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271420";
+    const APP_VERSION = "202511271450";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -693,10 +765,18 @@
     let app, db, auth;
     const dbStatusEl = document.getElementById('db-status');
     const versionEl = document.getElementById('version-display');
-    if(versionEl) versionEl.textContent = "v" + APP_VERSION;
-
+    
     // --- Global State ---
-    var STORAGE_KEY = 'family_points_data_v11'; 
+    var STORAGE_KEY = 'family_points_data_v11';
+    var FAMILY_ID_KEY = 'family_points_id';
+    var currentFamilyId = localStorage.getItem(FAMILY_ID_KEY) || null;
+
+    if(versionEl) {
+        let displayVer = "v" + APP_VERSION;
+        if(currentFamilyId) displayVer += " | ID: " + currentFamilyId;
+        versionEl.textContent = displayVer;
+    }
+
     var defaultRules = [{ threshold: 3, points: 2 }, { threshold: 1, points: 1 }];
     var rulesState = JSON.parse(JSON.stringify(defaultRules));
     
@@ -724,6 +804,12 @@
     // Initialization Logic
     // -----------------------------------------------------------
     async function initApp() {
+        // Step 0: Check Family ID before anything else
+        if (!currentFamilyId) {
+            showLoginModal();
+            return; // Stop here until logged in
+        }
+
         try {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
@@ -734,48 +820,86 @@
             console.log("Firebase Auth Success");
             updateConnectionStatus('online');
 
-            // 2. Migration Check
+            // 2. Migration Check (Scoped to Family ID)
             await checkAndMigrateData();
 
-            // 3. Setup Listeners
+            // 3. Setup Listeners (Scoped to Family ID)
             setupRealtimeListeners();
 
         } catch (e) {
             console.error("Firebase Init/Auth Error:", e);
             updateConnectionStatus('offline');
-            // Fallback: load local data if cloud fails (optional read fallback)
+            // Fallback: load local data if cloud fails
             loadLocalDataOnly();
             renderAll();
         }
     }
 
+    // Login UI Logic
+    const loginModal = document.getElementById('login-modal');
+    const loginBtn = document.getElementById('login-btn');
+    const loginInput = document.getElementById('login-family-id');
+
+    function showLoginModal() {
+        loginModal.classList.add('open');
+        // Prevent closing by clicking background
+        loginModal.onclick = null;
+    }
+
+    if(loginBtn) {
+        loginBtn.addEventListener('click', function() {
+            const val = loginInput.value.trim();
+            if(val.length < 3) {
+                alert("家庭代號至少需要 3 個字元");
+                return;
+            }
+            // Save ID
+            currentFamilyId = val;
+            localStorage.setItem(FAMILY_ID_KEY, currentFamilyId);
+            loginModal.classList.remove('open');
+            
+            // Update UI Version Display right away
+            if(versionEl) {
+                let displayVer = "v" + APP_VERSION;
+                if(currentFamilyId) displayVer += " | ID: " + currentFamilyId;
+                versionEl.textContent = displayVer;
+            }
+
+            // [Modified] Instead of reload, just initApp directly
+            initApp();
+        });
+    }
+
     // 檢查雲端是否為空，若是則上傳 LocalStorage 資料
     async function checkAndMigrateData() {
+        if (!currentFamilyId) return;
+
         try {
-            const kidsRef = collection(db, 'kids');
+            // New Path: families/{familyId}/kids
+            const kidsRef = collection(db, 'families', currentFamilyId, 'kids');
             const snapshot = await getDocs(kidsRef);
 
             if (snapshot.empty) {
-                console.log("Cloud is empty. Migrating local data...");
+                console.log("Family cloud space is empty. Migrating local data...");
                 updateConnectionStatus('syncing');
 
-                // 先讀取本地資料
+                // 先讀取本地資料 (Use existing data in localStorage as seed)
                 loadLocalDataOnly(); 
 
                 // 上傳 Kids
                 const uploadPromises = Object.values(kidsState).map(kid => {
-                    return setDoc(doc(db, 'kids', kid.key), kid);
+                    return setDoc(doc(db, 'families', currentFamilyId, 'kids', kid.key), kid);
                 });
 
                 // 上傳 Rules
-                const rulesPromise = setDoc(doc(db, 'settings', 'rules'), { list: rulesState });
+                const rulesPromise = setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
 
                 await Promise.all([...uploadPromises, rulesPromise]);
-                console.log("Migration Complete!");
-                showToast("雲端初始化完成 (已上傳本地資料)");
+                console.log("Migration Complete for Family: " + currentFamilyId);
+                showToast("家庭資料初始化完成");
                 updateConnectionStatus('online');
             } else {
-                console.log("Cloud data found. Skipping migration.");
+                console.log("Cloud data found for this family. Skipping migration.");
             }
         } catch (e) {
             console.error("Migration failed:", e);
@@ -784,11 +908,12 @@
 
     // 設定監聽器：當雲端資料變更時，自動更新本地變數並重繪
     function setupRealtimeListeners() {
+        if (!currentFamilyId) return;
+
         // 1. Listen to Kids Collection
-        onSnapshot(collection(db, 'kids'), (snapshot) => {
+        onSnapshot(collection(db, 'families', currentFamilyId, 'kids'), (snapshot) => {
             if(snapshot.empty && !Object.keys(kidsState).length) return;
             
-            // Rebuild kidsState from snapshot
             const newKidsState = {};
             snapshot.forEach(doc => {
                 newKidsState[doc.id] = doc.data();
@@ -797,13 +922,12 @@
             // Merge logic
             kidsState = newKidsState;
             
-            // 如果當前選的小孩被刪除了，切換到第一個
             if (!kidsState[currentKid]) {
                 const keys = Object.keys(kidsState);
                 if(keys.length > 0) currentKid = keys[0];
             }
 
-            console.log("Received update from Firestore (Kids)");
+            console.log("Received update (Kids)");
             renderAll();
         }, (error) => {
             console.error("Listen failed:", error);
@@ -811,12 +935,12 @@
         });
 
         // 2. Listen to Rules
-        onSnapshot(doc(db, 'settings', 'rules'), (docSnap) => {
+        onSnapshot(doc(db, 'families', currentFamilyId, 'settings', 'rules'), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.list) {
                     rulesState = data.list;
-                    console.log("Received update from Firestore (Rules)");
+                    console.log("Received update (Rules)");
                     renderAll();
                 }
             }
@@ -838,9 +962,9 @@
         if(dbStatusEl) {
             let className = 'connection-dot ' + status;
             dbStatusEl.className = className;
-            if(status === 'online') dbStatusEl.title = "已連線到雲端 (同步中)";
+            if(status === 'online') dbStatusEl.title = "已連線 (同步中)";
             else if(status === 'syncing') dbStatusEl.title = "資料同步中...";
-            else dbStatusEl.title = "離線 / 連線失敗";
+            else dbStatusEl.title = "離線";
         }
     }
 
@@ -957,40 +1081,34 @@
         return (monday.getMonth()+1) + '/' + monday.getDate() + " ～ " + (sunday.getMonth()+1) + '/' + sunday.getDate();
     }
 
-    // Phase 3: Cloud Write Implementation
-    // Replaced saveData to write to Firestore
+    // Phase 4: Scoped Write Implementation
     async function saveData(type, id) {
-      triggerSaveIndicator();
+      if (!currentFamilyId) return;
 
-      // 本地 LocalStorage 寫入已移除 (或可保留作離線備份，此處依照需求改為主要寫入雲端)
-      // 如果需要離線備份: localStorage.setItem(STORAGE_KEY, JSON.stringify({kids: kidsState, rules: rulesState}));
+      triggerSaveIndicator();
       
       try {
         if (type === 'kid' && id) {
-            // Save specific kid document (overwrite/update)
             const kidData = kidsState[id];
             if(kidData) {
-                await setDoc(doc(db, 'kids', id), kidData);
-                console.log(`Saved kid: ${id}`);
+                await setDoc(doc(db, 'families', currentFamilyId, 'kids', id), kidData);
+                console.log(`Saved kid: ${id} to family: ${currentFamilyId}`);
             }
         } else if (type === 'delete_kid' && id) {
-            // Delete kid document
-            await deleteDoc(doc(db, 'kids', id));
+            await deleteDoc(doc(db, 'families', currentFamilyId, 'kids', id));
             console.log(`Deleted kid: ${id}`);
         } else if (type === 'rules') {
-            // Save rules document
-            await setDoc(doc(db, 'settings', 'rules'), { list: rulesState });
+            await setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
             console.log(`Saved rules`);
         } else {
-            // Fallback: if no args provided (should not happen if all calls updated),
-            // try to save current kid as best guess
+            // Fallback
             if (currentKid && kidsState[currentKid]) {
-                await setDoc(doc(db, 'kids', currentKid), kidsState[currentKid]);
+                await setDoc(doc(db, 'families', currentFamilyId, 'kids', currentKid), kidsState[currentKid]);
             }
         }
       } catch(e) {
           console.error("Cloud save failed:", e);
-          showToast("雲端存檔失敗: " + e.message);
+          showToast("雲端存檔失敗");
           updateConnectionStatus('offline');
       }
     }
@@ -1025,17 +1143,12 @@
     }
 
     function performReset() {
-      // Phase 3 Reset: Since we removed LocalStorage dependency, 
-      // "Reset" might mean clearing cloud data or just local? 
-      // For safety, let's keep it as local reset + clear local storage key just in case
-      localStorage.removeItem(STORAGE_KEY);
-      
-      // In a real app, maybe we don't want a button to wipe all cloud data easily.
-      // We will just reload page or reset local state variable to default 
-      // BUT if we don't write to cloud, the listener will bring data back.
-      // So this button is now mostly for "Logout/Clear Cache" or needs to delete cloud docs.
-      // For now, let's just show toast.
-      showToast('提示：雲端版請手動刪除任務/小孩來重置');
+      // Logout logic
+      if(confirm('確定要登出並清除本機紀錄嗎？\n(您的雲端資料仍會保留在該家庭代號下)')) {
+          localStorage.removeItem(FAMILY_ID_KEY);
+          localStorage.removeItem(STORAGE_KEY);
+          window.location.reload();
+      }
     }
     
     function handleTestDataGen() {
@@ -1187,8 +1300,14 @@
 
         var kid = kidsState[currentKid];
         kidNameEl.textContent = kid.displayName;
-        // 注意：這裡不能直接蓋掉 avatarEl.innerHTML，因為會把連線燈號刪掉
-        // 我們只更新第一個 TextNode (名字首字)
+        if(currentFamilyId) {
+             var idTag = document.createElement('span');
+             idTag.className = 'family-id-tag';
+             idTag.textContent = currentFamilyId;
+             // Append or update ID tag? simpler just to redraw name area carefully
+             // Let's just keep name clean and show ID in settings or bottom
+        }
+        
         var firstChild = avatarEl.firstChild;
         if(firstChild && firstChild.nodeType === 3) {
             firstChild.textContent = kid.avatar;
