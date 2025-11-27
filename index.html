@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v5.0 (測試驗證版)</title>
+  <title>家用點數任務板 v5.1 (新增編輯任務)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -662,7 +662,7 @@
            <div class="settings-item">
             <div>
               <div class="settings-label" style="color:#1565c0;">🛠 產生測試資料</div>
-              <div class="settings-sub">在前兩週隨機產生打勾紀錄 (含已刪除任務)。</div>
+              <div class="settings-sub">隨機產生前兩週的任務紀錄(供測試用)。</div>
             </div>
             <button id="test-data-btn" class="settings-btn" type="button" style="color:#1565c0;border-color:#bbdefb;">測試</button>
           </div>
@@ -686,7 +686,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271710
+            v202511271820
         </div>
       </section>
     </main>
@@ -746,6 +746,22 @@
       </div>
     </div>
 
+    <!-- 編輯任務 Modal -->
+    <div class="modal-overlay" id="edit-task-modal">
+      <div class="modal">
+        <h3>編輯任務</h3>
+        <input type="hidden" id="edit-task-id" />
+        <div class="form-group">
+          <label>任務名稱</label>
+          <input id="edit-task-name" class="small-input" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" id="btn-cancel-task-edit">取消</button>
+          <button class="btn-save" id="btn-save-task-edit">儲存</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 週次選擇 Modal -->
     <div class="modal-overlay" id="week-select-modal">
         <div class="modal">
@@ -788,7 +804,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271710";
+    const APP_VERSION = "202511271820";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -1381,6 +1397,13 @@
     var weekSelectModal = document.getElementById('week-select-modal');
     var weekListContainer = document.getElementById('week-list-container');
 
+    // New vars for Task Edit Modal
+    var editTaskModal = document.getElementById('edit-task-modal');
+    var editTaskIdInput = document.getElementById('edit-task-id');
+    var editTaskNameInput = document.getElementById('edit-task-name');
+    var btnCancelTaskEdit = document.getElementById('btn-cancel-task-edit');
+    var btnSaveTaskEdit = document.getElementById('btn-save-task-edit');
+
     if (resetDataBtn) {
       resetDataBtn.addEventListener('click', function() {
           performReset();
@@ -1770,7 +1793,27 @@
 
             var item = document.createElement('div');
             item.className = 'settings-item';
-            item.innerHTML = '<div>' + t.name + '</div>';
+            
+            // Name
+            var nameDiv = document.createElement('div');
+            nameDiv.textContent = t.name;
+            item.appendChild(nameDiv);
+
+            // Buttons Container
+            var btnDiv = document.createElement('div');
+            btnDiv.style.display = 'flex';
+            btnDiv.style.gap = '8px';
+
+            // Edit Button
+            var editBtn = document.createElement('button');
+            editBtn.className = 'settings-btn';
+            editBtn.textContent = '編輯';
+            editBtn.onclick = function() {
+                openEditTaskModal(t.id, t.name);
+            };
+            btnDiv.appendChild(editBtn);
+
+            // Delete Button
             var delBtn = document.createElement('button');
             delBtn.className = 'settings-btn delete-task-btn';
             delBtn.textContent = '刪除';
@@ -1779,7 +1822,9 @@
                     deleteTask(t.id);
                 }
             };
-            item.appendChild(delBtn);
+            btnDiv.appendChild(delBtn);
+
+            item.appendChild(btnDiv);
             settingsTaskListEl.appendChild(item);
         });
     }
@@ -1795,6 +1840,30 @@
             showToast('任務已封存');
         }
     }
+
+    function openEditTaskModal(id, name) {
+        editTaskIdInput.value = id;
+        editTaskNameInput.value = name;
+        editTaskModal.classList.add('open');
+    }
+
+    if(btnCancelTaskEdit) btnCancelTaskEdit.onclick = function() { editTaskModal.classList.remove('open'); };
+    
+    if(btnSaveTaskEdit) btnSaveTaskEdit.onclick = function() {
+        var id = editTaskIdInput.value;
+        var newName = editTaskNameInput.value.trim();
+        if(!newName) return;
+        
+        var kid = kidsState[currentKid];
+        var task = kid.tasks.find(t => t.id === id);
+        if(task) {
+            task.name = newName;
+            saveData('kid', currentKid);
+            renderAll();
+            showToast('任務名稱已更新');
+        }
+        editTaskModal.classList.remove('open');
+    };
 
     settingsNewTaskBtn.addEventListener('click', function() {
         var val = settingsNewTaskInput.value.trim();
