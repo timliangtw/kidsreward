@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v3.1 (雲端監聽版)</title>
+  <title>家用點數任務板 v3.2 (雲端寫入版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -453,7 +453,7 @@
           <div class="kid-info-block">
             <div class="name-row">
                 <div class="kid-name">Leo</div>
-                <div id="save-badge" class="save-badge">✅ 已儲存</div>
+                <div id="save-badge" class="save-badge">✅ 已同步</div>
             </div>
             <div class="kid-sub">今天一起加油 💪</div>
           </div>
@@ -598,7 +598,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271410
+            v202511271420
         </div>
       </section>
     </main>
@@ -672,13 +672,14 @@
 
   <script type="module">
     // -----------------------------------------------------------
-    // 1. Firebase 初始化 & Phase 2: Migration/Listeners
+    // 1. Firebase 初始化 & Phase 3: Write Integration
     // -----------------------------------------------------------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    // 新增 deleteDoc 引入
+    import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271410";
+    const APP_VERSION = "202511271420";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -742,7 +743,7 @@
         } catch (e) {
             console.error("Firebase Init/Auth Error:", e);
             updateConnectionStatus('offline');
-            // Fallback: load local data if cloud fails
+            // Fallback: load local data if cloud fails (optional read fallback)
             loadLocalDataOnly();
             renderAll();
         }
@@ -766,7 +767,7 @@
                     return setDoc(doc(db, 'kids', kid.key), kid);
                 });
 
-                // 上傳 Rules (放在 settings/rules 文件中)
+                // 上傳 Rules
                 const rulesPromise = setDoc(doc(db, 'settings', 'rules'), { list: rulesState });
 
                 await Promise.all([...uploadPromises, rulesPromise]);
@@ -785,7 +786,7 @@
     function setupRealtimeListeners() {
         // 1. Listen to Kids Collection
         onSnapshot(collection(db, 'kids'), (snapshot) => {
-            if(snapshot.empty) return; // Should not happen after migration
+            if(snapshot.empty && !Object.keys(kidsState).length) return;
             
             // Rebuild kidsState from snapshot
             const newKidsState = {};
@@ -793,8 +794,7 @@
                 newKidsState[doc.id] = doc.data();
             });
             
-            // Merge logic: ensure we keep the current structure valid
-            // (e.g., if a new kid is added remotely)
+            // Merge logic
             kidsState = newKidsState;
             
             // 如果當前選的小孩被刪除了，切換到第一個
@@ -838,7 +838,7 @@
         if(dbStatusEl) {
             let className = 'connection-dot ' + status;
             dbStatusEl.className = className;
-            if(status === 'online') dbStatusEl.title = "已連線到雲端 (監聽中)";
+            if(status === 'online') dbStatusEl.title = "已連線到雲端 (同步中)";
             else if(status === 'syncing') dbStatusEl.title = "資料同步中...";
             else dbStatusEl.title = "離線 / 連線失敗";
         }
@@ -957,16 +957,42 @@
         return (monday.getMonth()+1) + '/' + monday.getDate() + " ～ " + (sunday.getMonth()+1) + '/' + sunday.getDate();
     }
 
-    // Phase 2: Save Data is still LOCAL ONLY (Cloud Write is Phase 3)
-    function saveData() {
-      // 仍然寫入 LocalStorage 作為備份，並提供 "UI 反應"
-      // 注意：因為現在有 onSnapshot，如果這裡不寫入雲端，
-      // 而雲端監聽器又觸發了更新（例如重新連線取得舊資料），
-      // UI 可能會跳回雲端的狀態。這是預期的，因為雲端是 Source of Truth。
-      // 在第三階段我們會在這裡加入 setDoc/updateDoc
-      var data = { kids: kidsState, rules: rulesState };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    // Phase 3: Cloud Write Implementation
+    // Replaced saveData to write to Firestore
+    async function saveData(type, id) {
       triggerSaveIndicator();
+
+      // 本地 LocalStorage 寫入已移除 (或可保留作離線備份，此處依照需求改為主要寫入雲端)
+      // 如果需要離線備份: localStorage.setItem(STORAGE_KEY, JSON.stringify({kids: kidsState, rules: rulesState}));
+      
+      try {
+        if (type === 'kid' && id) {
+            // Save specific kid document (overwrite/update)
+            const kidData = kidsState[id];
+            if(kidData) {
+                await setDoc(doc(db, 'kids', id), kidData);
+                console.log(`Saved kid: ${id}`);
+            }
+        } else if (type === 'delete_kid' && id) {
+            // Delete kid document
+            await deleteDoc(doc(db, 'kids', id));
+            console.log(`Deleted kid: ${id}`);
+        } else if (type === 'rules') {
+            // Save rules document
+            await setDoc(doc(db, 'settings', 'rules'), { list: rulesState });
+            console.log(`Saved rules`);
+        } else {
+            // Fallback: if no args provided (should not happen if all calls updated),
+            // try to save current kid as best guess
+            if (currentKid && kidsState[currentKid]) {
+                await setDoc(doc(db, 'kids', currentKid), kidsState[currentKid]);
+            }
+        }
+      } catch(e) {
+          console.error("Cloud save failed:", e);
+          showToast("雲端存檔失敗: " + e.message);
+          updateConnectionStatus('offline');
+      }
     }
 
     function triggerSaveIndicator() {
@@ -998,16 +1024,18 @@
         return score;
     }
 
-    // loadData is removed/replaced by initApp & setupRealtimeListeners
-
     function performReset() {
+      // Phase 3 Reset: Since we removed LocalStorage dependency, 
+      // "Reset" might mean clearing cloud data or just local? 
+      // For safety, let's keep it as local reset + clear local storage key just in case
       localStorage.removeItem(STORAGE_KEY);
-      kidsState = JSON.parse(JSON.stringify(defaultKidsState));
-      rulesState = JSON.parse(JSON.stringify(defaultRules));
-      currentKid = 'leo';
-      currentViewWeekKey = getCurrentWeekKey(); 
-      renderAll();
-      showToast('本地資料已重置 (雲端資料未變更)');
+      
+      // In a real app, maybe we don't want a button to wipe all cloud data easily.
+      // We will just reload page or reset local state variable to default 
+      // BUT if we don't write to cloud, the listener will bring data back.
+      // So this button is now mostly for "Logout/Clear Cache" or needs to delete cloud docs.
+      // For now, let's just show toast.
+      showToast('提示：雲端版請手動刪除任務/小孩來重置');
     }
     
     function handleTestDataGen() {
@@ -1050,7 +1078,7 @@
         }
         
         kid.totalPoints += addedPoints;
-        saveData();
+        saveData('kid', currentKid);
         renderAll();
         showToast('已生成測試資料，請點擊上方日期切換週次');
     }
@@ -1109,20 +1137,7 @@
 
     if (resetDataBtn) {
       resetDataBtn.addEventListener('click', function() {
-        if (resetDataBtn.textContent !== '確定重置？') {
-          resetDataBtn.textContent = '確定重置？';
-          resetDataBtn.style.backgroundColor = '#ffebee'; 
-          setTimeout(function() {
-            if (resetDataBtn.parentElement) { 
-              resetDataBtn.textContent = '重置';
-              resetDataBtn.style.backgroundColor = '';
-            }
-          }, 3000);
-        } else {
           performReset();
-          resetDataBtn.textContent = '重置';
-          resetDataBtn.style.backgroundColor = '';
-        }
       });
     }
 
@@ -1328,7 +1343,7 @@
                 playDeductSound(); 
             }
         }
-        saveData();
+        saveData('kid', currentKid);
         renderCurrentKid();
         renderWeekTable();
     }
@@ -1355,7 +1370,7 @@
             playDeductSound();
             showToast('已扣點');
         }
-        saveData();
+        saveData('kid', currentKid);
         renderAll();
     }
 
@@ -1388,7 +1403,7 @@
         showDeductAnimation();
         playDeductSound();
         showToast('兌換成功！');
-        saveData();
+        saveData('kid', currentKid);
         renderAll();
     });
 
@@ -1463,7 +1478,7 @@
         var kid = kidsState[currentKid];
         kid.history = kid.history.filter(x => x.id !== id);
         kid.totalPoints -= delta; 
-        saveData();
+        saveData('kid', currentKid);
         renderAll();
         showToast('紀錄已刪除');
     }
@@ -1492,7 +1507,7 @@
     function deleteTask(taskId) {
         var kid = kidsState[currentKid];
         kid.tasks = kid.tasks.filter(t => t.id !== taskId);
-        saveData();
+        saveData('kid', currentKid);
         renderAll();
     }
 
@@ -1502,7 +1517,7 @@
         var kid = kidsState[currentKid];
         kid.tasks.push({ id: 't'+Date.now(), name: val });
         settingsNewTaskInput.value = '';
-        saveData();
+        saveData('kid', currentKid);
         renderAll();
         showToast('任務已新增');
     });
@@ -1564,7 +1579,7 @@
             history: [],
             tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
         };
-        saveData();
+        saveData('kid', newKey);
         renderAll();
         showToast('已新增小孩，請到編輯修改資料');
     }
@@ -1576,7 +1591,8 @@
             if(keys.length > 0) currentKid = keys[0];
             else currentKid = null;
         }
-        saveData();
+        // 使用 delete_kid 類型刪除雲端文件
+        saveData('delete_kid', key);
         renderAll();
     }
 
@@ -1602,7 +1618,7 @@
         kid.totalPoints = parseInt(editKidPointsInput.value) || 0;
         var radios = document.getElementsByName('edit-kid-theme');
         radios.forEach(r => { if(r.checked) kid.theme = r.value; });
-        saveData();
+        saveData('kid', key);
         renderAll();
         editKidModal.classList.remove('open');
         showToast('資料已更新');
@@ -1625,7 +1641,7 @@
             delBtn.textContent = '刪除';
             delBtn.onclick = function() {
                 rulesState.splice(idx, 1);
-                saveData();
+                saveData('rules');
                 renderAll();
             };
             row.appendChild(delBtn);
@@ -1640,7 +1656,7 @@
         rulesState.push({ threshold: t, points: p });
         ruleThresholdInput.value = '';
         rulePointsInput.value = '';
-        saveData();
+        saveData('rules');
         renderAll();
         showToast('規則已新增');
     });
