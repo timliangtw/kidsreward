@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v4.8 (自動偵測更新)</title>
+  <title>家用點數任務板 v5.0 (測試驗證版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -662,7 +662,7 @@
            <div class="settings-item">
             <div>
               <div class="settings-label" style="color:#1565c0;">🛠 產生測試資料</div>
-              <div class="settings-sub">隨機產生前兩週的任務紀錄(供測試用)。</div>
+              <div class="settings-sub">在前兩週隨機產生打勾紀錄 (含已刪除任務)。</div>
             </div>
             <button id="test-data-btn" class="settings-btn" type="button" style="color:#1565c0;border-color:#bbdefb;">測試</button>
           </div>
@@ -686,7 +686,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271640
+            v202511271710
         </div>
       </section>
     </main>
@@ -788,7 +788,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271640";
+    const APP_VERSION = "202511271710";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -1309,6 +1309,8 @@
             
             for(var day=0; day<7; day++) {
                 var oldScore = weekData.ruleScores[day];
+                // Loop through ALL tasks, including deleted ones
+                // This ensures soft-deleted tasks get history populated for verification
                 kid.tasks.forEach(task => {
                     if(Math.random() > 0.4) { 
                         if(!weekData.status[day]) weekData.status[day] = {};
@@ -1324,7 +1326,7 @@
         kid.totalPoints += addedPoints;
         saveData('kid', currentKid);
         renderAll();
-        showToast('已生成測試資料，請點擊上方日期切換週次');
+        showToast('已生成測試資料 (含已刪除任務的歷史紀錄)');
     }
     
     function renderAll() {
@@ -1503,22 +1505,45 @@
         });
         table.appendChild(headerRow);
 
-        kid.tasks.forEach(function(task) {
+        // --- Soft Delete Logic for Table ---
+        // Filter tasks: Show if NOT deleted OR (Is deleted BUT has data in this week)
+        var tasksToShow = kid.tasks.filter(function(t) {
+            // 1. If active, always show
+            if (!t.deleted) return true;
+            
+            // 2. If deleted, check if there is any data in this specific week
+            // weekData.status is array of 7 objects (days)
+            var hasDataInWeek = weekData.status.some(function(dayStatus) {
+                // Check if this task ID exists in the day's status object
+                return dayStatus && (dayStatus[t.id] === 'checked' || dayStatus[t.id] === 'crossed');
+            });
+            
+            return hasDataInWeek;
+        });
+
+        tasksToShow.forEach(function(task) {
             var row = document.createElement('div');
             row.className = 'task-row';
 
             var nameCell = document.createElement('div');
             nameCell.className = 'task-name';
-            nameCell.textContent = task.name;
-            var pressTimer;
-            nameCell.addEventListener('touchstart', function(){
-                pressTimer = setTimeout(function(){
-                    if(confirm('要刪除任務「'+task.name+'」嗎？(不會影響歷史分數)')) {
-                        deleteTask(task.id);
-                    }
-                }, 800);
-            });
-            nameCell.addEventListener('touchend', function(){ clearTimeout(pressTimer); });
+            // Mark deleted tasks visually in history
+            if (task.deleted) {
+                nameCell.textContent = task.name + " (已封存)";
+                nameCell.style.color = "#999";
+                nameCell.style.fontStyle = "italic";
+            } else {
+                nameCell.textContent = task.name;
+                var pressTimer;
+                nameCell.addEventListener('touchstart', function(){
+                    pressTimer = setTimeout(function(){
+                        if(confirm('要刪除任務「'+task.name+'」嗎？(歷史紀錄會保留，但列表中會隱藏)')) {
+                            deleteTask(task.id);
+                        }
+                    }, 800);
+                });
+                nameCell.addEventListener('touchend', function(){ clearTimeout(pressTimer); });
+            }
             row.appendChild(nameCell);
 
             for (var i=0; i<7; i++) {
@@ -1531,6 +1556,8 @@
                 check.className = 'custom-check ' + (status === 'checked' ? 'checked' : (status === 'crossed' ? 'crossed' : ''));
                 check.textContent = status === 'checked' ? '✔' : (status === 'crossed' ? '✖' : '');
                 
+                // If task is deleted, disable interaction to prevent resurrecting it by accident?
+                // Or allow editing history? Let's allow editing for now but visual cue is distinct.
                 (function(dIndex, taskId) {
                     check.onclick = function() {
                         toggleCheck(dIndex, taskId);
@@ -1738,6 +1765,9 @@
         var kid = kidsState[currentKid];
         settingsTaskListEl.innerHTML = '';
         kid.tasks.forEach(function(t) {
+            // Only show ACTIVE (not deleted) tasks in settings
+            if (t.deleted) return;
+
             var item = document.createElement('div');
             item.className = 'settings-item';
             item.innerHTML = '<div>' + t.name + '</div>';
@@ -1745,7 +1775,7 @@
             delBtn.className = 'settings-btn delete-task-btn';
             delBtn.textContent = '刪除';
             delBtn.onclick = function() {
-                if(confirm('確定刪除「'+t.name+'」？這會從表格中移除此列。')) {
+                if(confirm('確定刪除「'+t.name+'」？(歷史紀錄將被保留，但此任務將被封存)')) {
                     deleteTask(t.id);
                 }
             };
@@ -1756,16 +1786,21 @@
 
     function deleteTask(taskId) {
         var kid = kidsState[currentKid];
-        kid.tasks = kid.tasks.filter(t => t.id !== taskId);
-        saveData('kid', currentKid);
-        renderAll();
+        // Soft Delete: Mark as deleted instead of filter out
+        var task = kid.tasks.find(t => t.id === taskId);
+        if (task) {
+            task.deleted = true;
+            saveData('kid', currentKid);
+            renderAll();
+            showToast('任務已封存');
+        }
     }
 
     settingsNewTaskBtn.addEventListener('click', function() {
         var val = settingsNewTaskInput.value.trim();
         if(!val) return;
         var kid = kidsState[currentKid];
-        kid.tasks.push({ id: 't'+Date.now(), name: val });
+        kid.tasks.push({ id: 't'+Date.now(), name: val, createdAt: new Date().toISOString() });
         settingsNewTaskInput.value = '';
         saveData('kid', currentKid);
         renderAll();
