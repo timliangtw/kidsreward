@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v4.1 (修復登入循環)</title>
+  <title>家用點數任務板 v4.2 (時區修復版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -751,7 +751,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271450";
+    const APP_VERSION = "202511271530";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -774,7 +774,9 @@
     if(versionEl) {
         let displayVer = "v" + APP_VERSION;
         if(currentFamilyId) displayVer += " | ID: " + currentFamilyId;
-        versionEl.textContent = displayVer;
+        // 顯示系統時間供除錯
+        displayVer += "<br>系統認定今天: " + formatDateKey(new Date());
+        versionEl.innerHTML = displayVer;
     }
 
     var defaultRules = [{ threshold: 3, points: 2 }, { threshold: 1, points: 1 }];
@@ -862,7 +864,8 @@
             if(versionEl) {
                 let displayVer = "v" + APP_VERSION;
                 if(currentFamilyId) displayVer += " | ID: " + currentFamilyId;
-                versionEl.textContent = displayVer;
+                displayVer += "<br>系統認定今天: " + formatDateKey(new Date());
+                versionEl.innerHTML = displayVer;
             }
 
             // [Modified] Instead of reload, just initApp directly
@@ -1473,7 +1476,7 @@
         kid.totalPoints += val;
         kid.history.push({
             id: Date.now().toString(),
-            date: new Date().toISOString().split('T')[0],
+            date: formatDateKey(new Date()), // Use local date
             item: '快速加扣',
             delta: val,
             note: note || (val > 0 ? '手動加點' : '手動扣點')
@@ -1510,7 +1513,7 @@
         kid.totalPoints -= pts;
         kid.history.push({
             id: Date.now().toString(),
-            date: new Date().toISOString().split('T')[0],
+            date: formatDateKey(new Date()), // Use local date
             item: '兌換：' + name,
             delta: -pts,
             note: note
