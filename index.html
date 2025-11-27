@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v4.3 (輸入驗證版)</title>
+  <title>家用點數任務板 v4.4 (離線支援版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -654,7 +654,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271536
+            v202511271540
         </div>
       </section>
     </main>
@@ -748,10 +748,10 @@
     // 1. Firebase 初始化 & Phase 4: Family ID Isolation
     // -----------------------------------------------------------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271536";
+    const APP_VERSION = "202511271540";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -815,6 +815,20 @@
         try {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
+            
+            // --- New: Enable Offline Persistence ---
+            try {
+                await enableIndexedDbPersistence(db);
+                console.log("Offline persistence enabled");
+            } catch (err) {
+                if (err.code == 'failed-precondition') {
+                    console.log("Persistence failed: Multiple tabs open");
+                } else if (err.code == 'unimplemented') {
+                    console.log("Persistence not supported by browser");
+                }
+            }
+            // ---------------------------------------
+
             auth = getAuth(app);
 
             // 1. Auth First
