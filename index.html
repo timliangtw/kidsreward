@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v4.4 (離線支援版)</title>
+  <title>家用點數任務板 v4.5 (穩定修復版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -654,7 +654,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271540
+            v202511271545
         </div>
       </section>
     </main>
@@ -751,7 +751,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271540";
+    const APP_VERSION = "202511271545";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -763,6 +763,10 @@
     };
 
     let app, db, auth;
+    // Fix: Add global listener variables to handle unsubscription
+    let unsubscribeKids = null;
+    let unsubscribeRules = null;
+
     const dbStatusEl = document.getElementById('db-status');
     const versionEl = document.getElementById('version-display');
     
@@ -841,6 +845,10 @@
 
             // 3. Setup Listeners (Scoped to Family ID)
             setupRealtimeListeners();
+            
+            // 4. Initial Scroll to Today (after data loaded/rendered)
+            // Since data loads async, we can only try, but real scroll happens after renderAll
+            // which is triggered by listeners.
 
         } catch (e) {
             console.error("Firebase Init/Auth Error:", e);
@@ -933,8 +941,18 @@
     function setupRealtimeListeners() {
         if (!currentFamilyId) return;
 
+        // Fix: Check and unsubscribe previous listeners to avoid duplication
+        if (unsubscribeKids) {
+            unsubscribeKids();
+            unsubscribeKids = null;
+        }
+        if (unsubscribeRules) {
+            unsubscribeRules();
+            unsubscribeRules = null;
+        }
+
         // 1. Listen to Kids Collection
-        onSnapshot(collection(db, 'families', currentFamilyId, 'kids'), (snapshot) => {
+        unsubscribeKids = onSnapshot(collection(db, 'families', currentFamilyId, 'kids'), (snapshot) => {
             if(snapshot.empty && !Object.keys(kidsState).length) return;
             
             const newKidsState = {};
@@ -948,17 +966,20 @@
             if (!kidsState[currentKid]) {
                 const keys = Object.keys(kidsState);
                 if(keys.length > 0) currentKid = keys[0];
+                else currentKid = null; // Ensure safely handled if no kids
             }
 
             console.log("Received update (Kids)");
             renderAll();
+            // Try scrolling to today on fresh data load
+            highlightTodayColumn();
         }, (error) => {
             console.error("Listen failed:", error);
             updateConnectionStatus('offline');
         });
 
         // 2. Listen to Rules
-        onSnapshot(doc(db, 'families', currentFamilyId, 'settings', 'rules'), (docSnap) => {
+        unsubscribeRules = onSnapshot(doc(db, 'families', currentFamilyId, 'settings', 'rules'), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.list) {
@@ -1840,7 +1861,13 @@
     }
 
     function highlightTodayColumn() {
-        var todayIdx = getTodayColumnIndex();
+        setTimeout(() => {
+            const todayCols = document.querySelectorAll('.today-col');
+            if(todayCols.length > 0) {
+                const target = todayCols[0];
+                target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+        }, 300);
     }
 
     // -----------------------------------------------------------
