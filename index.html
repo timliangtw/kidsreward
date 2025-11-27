@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v2.3 (修復測試按鈕)</title>
+  <title>家用點數任務板 v3.0 (Firebase連線版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -59,7 +59,25 @@
       font-size: 22px;
       color: #333;
       flex-shrink: 0;
+      position: relative; /* For connection dot positioning */
     }
+
+    /* 連線狀態燈號 */
+    .connection-dot {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 14px;
+        height: 14px;
+        background-color: #ccc; /* Default gray */
+        border: 2px solid #fff;
+        border-radius: 50%;
+        transition: background-color 0.3s ease, transform 0.3s ease;
+        z-index: 10;
+    }
+    .connection-dot.online { background-color: #4caf50; box-shadow: 0 0 6px rgba(76, 175, 80, 0.6); }
+    .connection-dot.offline { background-color: #f44336; }
+    
     .kid-info-block { display: flex; flex-direction: column; }
     
     .name-row { display: flex; align-items: center; gap: 8px; }
@@ -415,7 +433,11 @@
     <header>
       <div class="header-top">
         <div class="kid-main">
-          <div class="avatar">L</div>
+          <div class="avatar">
+            L
+            <!-- 連線狀態指示燈 -->
+            <div id="db-status" class="connection-dot" title="連線中..."></div>
+          </div>
           <div class="kid-info-block">
             <div class="name-row">
                 <div class="kid-name">Leo</div>
@@ -631,7 +653,57 @@
 
   </div>
 
-  <script>
+  <script type="module">
+    // -----------------------------------------------------------
+    // 1. Firebase 初始化 (Phase 1)
+    // -----------------------------------------------------------
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
+      authDomain: "familypoints-a51f1.firebaseapp.com",
+      projectId: "familypoints-a51f1",
+      storageBucket: "familypoints-a51f1.firebasestorage.app",
+      messagingSenderId: "1087519864570",
+      appId: "1:1087519864570:web:d64e17a153109664b23b43"
+    };
+
+    let app, db, auth;
+    const dbStatusEl = document.getElementById('db-status');
+
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        
+        // 嘗試簡單的匿名登入以確認連線權限 (非強制，但建議)
+        signInAnonymously(auth).then(() => {
+            console.log("Firebase Auth (Anon) Success");
+            updateConnectionStatus('online');
+        }).catch((e) => {
+            console.warn("Auth warning:", e);
+            // 就算 Auth 失敗，如果只是純連線檢查，我們先顯示綠燈，真正讀寫失敗再轉紅
+            updateConnectionStatus('online'); 
+        });
+
+    } catch (e) {
+        console.error("Firebase Init Error:", e);
+        updateConnectionStatus('offline');
+    }
+
+    function updateConnectionStatus(status) {
+        if(dbStatusEl) {
+            dbStatusEl.className = 'connection-dot ' + status;
+            dbStatusEl.title = status === 'online' ? "已連線到雲端" : "離線 / 連線失敗";
+        }
+    }
+
+    // -----------------------------------------------------------
+    // 2. 原有程式邏輯 (適配 Module)
+    // -----------------------------------------------------------
+
     // 強力禁止縮放邏輯
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
@@ -744,7 +816,6 @@
 
     var currentViewWeekKey = getCurrentWeekKey();
 
-    // 更新 Key 以區隔舊版本 (因為資料結構變了)
     var STORAGE_KEY = 'family_points_data_v11'; 
     
     var defaultRules = [
@@ -780,6 +851,7 @@
     var currentKid = 'leo';
 
     function saveData() {
+      // Phase 1: 仍然寫入 LocalStorage，Phase 3 才會改寫入 Firestore
       var data = { kids: kidsState, rules: rulesState };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       triggerSaveIndicator();
@@ -793,7 +865,6 @@
         }
     }
 
-    // 核心工具：根據目前的規則，計算某天狀態應該得幾分
     function computeRuleScoreForDay(dayStatus) {
         var checkedCount = 0;
         Object.values(dayStatus || {}).forEach(status => {
@@ -824,24 +895,17 @@
           if (data.kids) {
              Object.keys(data.kids).forEach(k => {
                  var kid = data.kids[k];
-                 // 確保 dataByWeek 存在
                  if(!kid.dataByWeek) kid.dataByWeek = {};
-                 
-                 // 資料遷移：確保每一週都有 ruleScores 欄位
                  Object.keys(kid.dataByWeek).forEach(weekKey => {
                      var weekData = kid.dataByWeek[weekKey];
-                     // 防呆：確保 status 陣列存在
                      if(!weekData.status) weekData.status = [{},{},{},{},{},{},{}];
-                     
                      if (!weekData.ruleScores) {
-                         // 舊資料沒有 ruleScores，我們根據目前的規則算一次並「凍結」起來
                          weekData.ruleScores = [0,0,0,0,0,0,0];
                          for(var i=0; i<7; i++) {
                              weekData.ruleScores[i] = computeRuleScoreForDay(weekData.status[i]);
                          }
                      }
                  });
-                 
                  if (!kid.tasks) kid.tasks = JSON.parse(JSON.stringify(legacyTasks));
              });
              kidsState = data.kids;
@@ -863,7 +927,6 @@
       showToast('資料已重置');
     }
     
-    // 測試資料生成 (修復版)
     function handleTestDataGen() {
         if(!confirm('這將會為目前的小孩「隨機產生前兩週的任務數據」，方便測試週次切換。確定嗎？')) return;
         
@@ -871,14 +934,12 @@
         var today = new Date();
         var addedPoints = 0;
 
-        // 生成前兩週的數據
         for(var w=1; w<=2; w++) {
             var pastDate = new Date(today);
             pastDate.setDate(today.getDate() - (w*7));
             var monday = getMonday(pastDate);
             var key = formatDateKey(monday);
             
-            // 初始化該週
             if(!kid.dataByWeek[key]) {
                 kid.dataByWeek[key] = {
                     status: [{},{},{},{},{},{},{}],
@@ -888,27 +949,19 @@
             }
             
             var weekData = kid.dataByWeek[key];
-            // 防呆初始化
             if(!weekData.status) weekData.status = [{},{},{},{},{},{},{}];
             if(!weekData.ruleScores) weekData.ruleScores = [0,0,0,0,0,0,0];
             
-            // 隨機填入
             for(var day=0; day<7; day++) {
                 var oldScore = weekData.ruleScores[day];
-                
-                // 隨機勾選任務
                 kid.tasks.forEach(task => {
-                    if(Math.random() > 0.4) { // 60% 機率完成
+                    if(Math.random() > 0.4) { 
                         if(!weekData.status[day]) weekData.status[day] = {};
                         weekData.status[day][task.id] = 'checked';
                     }
                 });
-
-                // 計算新分數並儲存
                 var newScore = computeRuleScoreForDay(weekData.status[day]);
                 weekData.ruleScores[day] = newScore;
-                
-                // 累加總分差異
                 addedPoints += (newScore - oldScore);
             }
         }
@@ -990,7 +1043,6 @@
       });
     }
 
-    // 修復：使用 addEventListener 綁定測試按鈕，避免 onclick 失效
     if (testDataBtn) {
         testDataBtn.addEventListener('click', handleTestDataGen);
     }
@@ -1006,27 +1058,20 @@
             kid.dataByWeek[weekKey] = {
                 status: [{},{},{},{},{},{},{}],
                 summary: [0,0,0,0,0,0,0],
-                ruleScores: [0,0,0,0,0,0,0] // 新增：儲存該日符合規則的分數
+                ruleScores: [0,0,0,0,0,0,0]
             };
         }
         return kid.dataByWeek[weekKey];
     }
 
-    // 計算當日總分 (讀取已凍結的 ruleScores + 手動增減)
     function calculateDailyTotal(kid, weekKey, dayIndex) {
       var weekData = getWeekData(kid, weekKey);
-      
-      // 如果沒有 ruleScores (舊資料)，則補算並存入
-      if (!weekData.ruleScores) {
-          weekData.ruleScores = [0,0,0,0,0,0,0];
-      }
-      
+      if (!weekData.ruleScores) weekData.ruleScores = [0,0,0,0,0,0,0];
       var ruleScore = weekData.ruleScores[dayIndex] || 0;
       var manualPoints = weekData.summary[dayIndex] || 0;
       return ruleScore + manualPoints;
     }
 
-    // 計算本週表格內的總分
     function calculateWeeklyGridPoints(kid, weekKey) {
         let total = 0;
         for (let i = 0; i < 7; i++) {
@@ -1038,13 +1083,20 @@
     function renderCurrentKid() {
         var kid = kidsState[currentKid];
         kidNameEl.textContent = kid.displayName;
-        avatarEl.textContent = kid.avatar;
+        // 注意：這裡不能直接蓋掉 avatarEl.innerHTML，因為會把連線燈號刪掉
+        // 我們只更新第一個 TextNode (名字首字)
+        var firstChild = avatarEl.firstChild;
+        if(firstChild && firstChild.nodeType === 3) {
+            firstChild.textContent = kid.avatar;
+        } else if (!firstChild) {
+            avatarEl.prepend(document.createTextNode(kid.avatar));
+        }
+
         kidSubEl.textContent = kid.slogan;
         appEl.classList.remove('boy', 'girl');
         appEl.classList.add(kid.theme);
         totalPointsEl.innerHTML = '<span>⭐</span><span>' + kid.totalPoints + ' 點</span>';
         
-        // 渲染本週點數
         const weeklyScore = calculateWeeklyGridPoints(kid, currentViewWeekKey);
         weeklyPointsEl.textContent = `本週：${weeklyScore} 點`;
 
@@ -1074,7 +1126,6 @@
         var todayIdx = getTodayColumnIndex();
         var isCurrentWeek = (currentViewWeekKey === getCurrentWeekKey());
 
-        // Header Row
         var headerRow = document.createElement('div');
         headerRow.className = 'week-header';
         
@@ -1083,25 +1134,20 @@
         corner.textContent = '任務 / 星期';
         headerRow.appendChild(corner);
 
-        // 計算此週的日期數字
         var mondayDate = new Date(currentViewWeekKey);
 
         days.forEach(function(d, i) {
             var cell = document.createElement('div');
             cell.className = 'day-header';
             if (isCurrentWeek && i === todayIdx) cell.classList.add('today-col');
-            
-            // 日期計算
             var thisDay = new Date(mondayDate);
             thisDay.setDate(mondayDate.getDate() + i);
             var dateStr = (thisDay.getMonth()+1) + '/' + thisDay.getDate();
-
             cell.innerHTML = `<div>${d}</div><div class="date-label">${dateStr}</div>`;
             headerRow.appendChild(cell);
         });
         table.appendChild(headerRow);
 
-        // Task Rows
         kid.tasks.forEach(function(task) {
             var row = document.createElement('div');
             row.className = 'task-row';
@@ -1109,7 +1155,6 @@
             var nameCell = document.createElement('div');
             nameCell.className = 'task-name';
             nameCell.textContent = task.name;
-            // 長按刪除任務
             var pressTimer;
             nameCell.addEventListener('touchstart', function(){
                 pressTimer = setTimeout(function(){
@@ -1128,7 +1173,6 @@
 
                 var check = document.createElement('div');
                 var status = (weekData.status[i] && weekData.status[i][task.id]) ? weekData.status[i][task.id] : '';
-                
                 check.className = 'custom-check ' + (status === 'checked' ? 'checked' : (status === 'crossed' ? 'crossed' : ''));
                 check.textContent = status === 'checked' ? '✔' : (status === 'crossed' ? '✖' : '');
                 
@@ -1144,7 +1188,6 @@
             table.appendChild(row);
         });
 
-        // Summary Row (Daily Points)
         var sumRow = document.createElement('div');
         sumRow.className = 'day-summary-row';
         var sumTitle = document.createElement('div');
@@ -1156,15 +1199,11 @@
             var cell = document.createElement('div');
             cell.className = 'day-summary-cell';
             if (isCurrentWeek && i === todayIdx) cell.classList.add('today-col');
-            
             var dailyTotal = calculateDailyTotal(kid, currentViewWeekKey, i);
-            
-            // 移除每日加減按鈕，只顯示分數
             var scoreSpan = document.createElement('span');
             scoreSpan.textContent = (dailyTotal > 0 ? '+' : '') + dailyTotal;
             if(dailyTotal > 0) scoreSpan.className = 'day-summary-cell-positive';
             if(dailyTotal < 0) scoreSpan.className = 'day-summary-cell-negative';
-            
             cell.appendChild(scoreSpan);
             sumRow.appendChild(cell);
         }
@@ -1174,11 +1213,7 @@
     function toggleCheck(dayIndex, taskId) {
         var kid = kidsState[currentKid];
         var weekData = getWeekData(kid, currentViewWeekKey);
-        
-        // 1. 先取得變動前的規則分數
         var oldRuleScore = weekData.ruleScores[dayIndex] || 0;
-        
-        // 2. 更新勾選狀態
         var current = (weekData.status[dayIndex] && weekData.status[dayIndex][taskId]) ? weekData.status[dayIndex][taskId] : '';
         var next = '';
         if (current === '') next = 'checked';
@@ -1188,11 +1223,9 @@
         if (!weekData.status[dayIndex]) weekData.status[dayIndex] = {};
         weekData.status[dayIndex][taskId] = next;
 
-        // 3. 根據「目前最新的規則」計算新的規則分數，並存回去 (Frozen)
         var newRuleScore = computeRuleScoreForDay(weekData.status[dayIndex]);
         weekData.ruleScores[dayIndex] = newRuleScore;
 
-        // 4. 更新總分
         var diff = newRuleScore - oldRuleScore;
 
         if (diff !== 0) {
@@ -1205,20 +1238,6 @@
                 playDeductSound(); 
             }
         }
-
-        saveData();
-        renderCurrentKid();
-        renderWeekTable();
-    }
-
-    // 注意：原本的 adjustDailySummary 函式仍然保留在程式碼中，
-    // 以防資料結構需要存取，但已從 UI 中移除呼叫入口。
-    function adjustDailySummary(dayIndex, val) {
-        var kid = kidsState[currentKid];
-        var weekData = getWeekData(kid, currentViewWeekKey);
-        
-        weekData.summary[dayIndex] = (weekData.summary[dayIndex] || 0) + val;
-        kid.totalPoints += val;
         saveData();
         renderCurrentKid();
         renderWeekTable();
@@ -1227,7 +1246,6 @@
     function handleQuickAdd(val) {
         var kid = kidsState[currentKid];
         var note = quickNoteInput.value.trim();
-        
         kid.totalPoints += val;
         kid.history.push({
             id: Date.now().toString(),
@@ -1247,7 +1265,6 @@
             playDeductSound();
             showToast('已扣點');
         }
-        
         saveData();
         renderAll();
     }
@@ -1278,7 +1295,6 @@
         redeemNameInput.value = '';
         redeemPointsInput.value = '';
         redeemNoteInput.value = '';
-        
         showDeductAnimation();
         playDeductSound();
         showToast('兌換成功！');
@@ -1294,14 +1310,12 @@
         var viewNextMonday = new Date(viewMonday);
         viewNextMonday.setDate(viewMonday.getDate() + 7);
 
-        // 過濾
         var filteredHistory = kid.history.filter(function(item) {
             var itemDate = new Date(item.date);
             return itemDate.getTime() >= viewMonday.getTime() && 
                    itemDate.getTime() < viewNextMonday.getTime();
         });
 
-        // 排序：新的在上面
         var list = filteredHistory.sort(function(a,b){ return b.id - a.id; });
 
         if (list.length === 0) {
@@ -1357,13 +1371,12 @@
     function deleteHistoryItem(id, delta) {
         var kid = kidsState[currentKid];
         kid.history = kid.history.filter(x => x.id !== id);
-        kid.totalPoints -= delta; // 復原分數
+        kid.totalPoints -= delta; 
         saveData();
         renderAll();
         showToast('紀錄已刪除');
     }
 
-    // --- Settings / Tasks ---
     function renderSettingsTaskList() {
         var kid = kidsState[currentKid];
         settingsTaskListEl.innerHTML = '';
@@ -1371,7 +1384,6 @@
             var item = document.createElement('div');
             item.className = 'settings-item';
             item.innerHTML = '<div>' + t.name + '</div>';
-            
             var delBtn = document.createElement('button');
             delBtn.className = 'settings-btn delete-task-btn';
             delBtn.textContent = '刪除';
@@ -1403,28 +1415,21 @@
         showToast('任務已新增');
     });
 
-    // --- Settings / Kids ---
     function renderSettingsKidList() {
         settingsKidListEl.innerHTML = '';
         Object.values(kidsState).forEach(function(k) {
             var item = document.createElement('div');
             item.className = 'settings-item';
-            
             var infoDiv = document.createElement('div');
             infoDiv.innerHTML = '<span style="font-weight:600">'+k.displayName+'</span> <span style="font-size:12px;color:#888">('+k.totalPoints+'點)</span>';
-            
             var btnDiv = document.createElement('div');
             btnDiv.style.display = 'flex';
             btnDiv.style.gap = '8px';
-
             var editBtn = document.createElement('button');
             editBtn.className = 'settings-btn';
             editBtn.textContent = '編輯';
             editBtn.onclick = function() { openEditKidModal(k.key); };
-            
             btnDiv.appendChild(editBtn);
-            
-            // 只有當小孩數量大於1時才顯示刪除
             if (Object.keys(kidsState).length > 1) {
                 var delBtn = document.createElement('button');
                 delBtn.className = 'settings-btn delete-task-btn';
@@ -1436,13 +1441,10 @@
                 };
                 btnDiv.appendChild(delBtn);
             }
-
             item.appendChild(infoDiv);
             item.appendChild(btnDiv);
             settingsKidListEl.appendChild(item);
         });
-
-        // 新增小孩按鈕
         var addDiv = document.createElement('div');
         addDiv.className = 'settings-item';
         addDiv.style.justifyContent = 'center';
@@ -1477,7 +1479,6 @@
 
     function deleteKid(key) {
         delete kidsState[key];
-        // 如果刪除了當前正在看的小孩，切換到第一個
         if (currentKid === key) {
             currentKid = Object.keys(kidsState)[0];
         }
@@ -1490,12 +1491,10 @@
         editKidKeyInput.value = key;
         editKidNameInput.value = kid.displayName;
         editKidPointsInput.value = kid.totalPoints;
-        
         var radios = document.getElementsByName('edit-kid-theme');
         radios.forEach(r => {
             if(r.value === kid.theme) r.checked = true;
         });
-
         editKidModal.classList.add('open');
     }
 
@@ -1504,21 +1503,17 @@
         var key = editKidKeyInput.value;
         var kid = kidsState[key];
         if(!kid) return;
-
         kid.displayName = editKidNameInput.value.trim() || 'No Name';
         kid.avatar = kid.displayName.charAt(0).toUpperCase();
         kid.totalPoints = parseInt(editKidPointsInput.value) || 0;
-        
         var radios = document.getElementsByName('edit-kid-theme');
         radios.forEach(r => { if(r.checked) kid.theme = r.value; });
-
         saveData();
         renderAll();
         editKidModal.classList.remove('open');
         showToast('資料已更新');
     };
 
-    // --- Settings / Rules ---
     function renderSettingsRulesList() {
         settingsRulesListEl.innerHTML = '';
         rulesState.sort((a,b) => b.threshold - a.threshold).forEach((rule, idx) => {
@@ -1548,7 +1543,6 @@
         var t = parseInt(ruleThresholdInput.value);
         var p = parseInt(rulePointsInput.value);
         if(isNaN(t) || isNaN(p)) return;
-        
         rulesState.push({ threshold: t, points: p });
         ruleThresholdInput.value = '';
         rulePointsInput.value = '';
@@ -1557,7 +1551,6 @@
         showToast('規則已新增');
     });
 
-    // --- Switch Kid ---
     switchBtn.addEventListener('click', function() {
         var keys = Object.keys(kidsState);
         var idx = keys.indexOf(currentKid);
@@ -1566,51 +1559,44 @@
         renderAll();
     });
 
-    // --- Week Select ---
     function openWeekSelectModal() {
         weekListContainer.innerHTML = '';
         var kid = kidsState[currentKid];
-        
-        // 找出所有有資料的週次 Key
         var weeks = Object.keys(kid.dataByWeek).sort().reverse();
-        // 確保本週一定在列表裡
         var thisWeek = getCurrentWeekKey();
-        if (!weeks.includes(thisWeek)) {
-             weeks.unshift(thisWeek);
-        }
-        
-        // 去除重複並排序
+        if (!weeks.includes(thisWeek)) weeks.unshift(thisWeek);
         weeks = [...new Set(weeks)].sort().reverse();
-
         weeks.forEach(function(wk) {
             var div = document.createElement('div');
             div.className = 'week-list-item ' + (wk === currentViewWeekKey ? 'active' : '');
-            
             var label = getWeekRangeString(wk);
             if (wk === thisWeek) label += " (本週)";
-            
-            div.textContent = label;
             div.onclick = function() {
                 currentViewWeekKey = wk;
                 closeWeekSelectModal();
                 renderAll();
             };
+            div.textContent = label;
             weekListContainer.appendChild(div);
         });
-        
         weekSelectModal.classList.add('open');
     }
     function closeWeekSelectModal() {
         weekSelectModal.classList.remove('open');
     }
 
-    // --- Init ---
     function highlightTodayColumn() {
         var todayIdx = getTodayColumnIndex();
-        // 簡單的視覺引導，如果想滑動到今天
-        // 但目前 CSS 已經用 .today-col 標示，這裡暫時留空
     }
 
+    // -----------------------------------------------------------
+    // 3. 綁定 Window 全域變數 (因為 HTML onclick 需要)
+    // -----------------------------------------------------------
+    window.handleQuickAdd = handleQuickAdd;
+    window.openWeekSelectModal = openWeekSelectModal;
+    window.closeWeekSelectModal = closeWeekSelectModal;
+    
+    // 初始化執行
     loadData();
     renderAll();
   </script>
