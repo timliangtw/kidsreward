@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v4.5 (穩定修復版)</title>
+  <title>家用點數任務板 v4.6 (連線狀態修復版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -654,7 +654,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271545
+            v202511271550
         </div>
       </section>
     </main>
@@ -751,7 +751,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271545";
+    const APP_VERSION = "202511271550";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -838,7 +838,19 @@
             // 1. Auth First
             await signInAnonymously(auth);
             console.log("Firebase Auth Success");
-            updateConnectionStatus('online');
+            
+            // Check initial network status for UI
+            updateConnectionStatus(navigator.onLine ? 'online' : 'offline');
+            
+            // Listen for network changes (Browser level)
+            window.addEventListener('online', () => {
+                console.log("Network back online");
+                updateConnectionStatus('online');
+            });
+            window.addEventListener('offline', () => {
+                console.log("Network lost");
+                updateConnectionStatus('offline');
+            });
 
             // 2. Migration Check (Scoped to Family ID)
             await checkAndMigrateData();
