@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v3.0 (Firebase連線版)</title>
+  <title>家用點數任務板 v3.1 (雲端監聽版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -77,6 +77,9 @@
     }
     .connection-dot.online { background-color: #4caf50; box-shadow: 0 0 6px rgba(76, 175, 80, 0.6); }
     .connection-dot.offline { background-color: #f44336; }
+    .connection-dot.syncing { background-color: #ff9800; animation: pulse 1s infinite; }
+    
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     
     .kid-info-block { display: flex; flex-direction: column; }
     
@@ -426,6 +429,15 @@
     }
     
     .empty-state { text-align: center; color: #999; padding: 20px; font-size: 14px; }
+    
+    /* Version info styling */
+    .version-info {
+        text-align: center;
+        font-size: 12px;
+        color: #aaa;
+        padding: 10px 0 20px;
+        font-family: monospace;
+    }
   </style>
 </head>
 <body>
@@ -583,6 +595,11 @@
             <button id="reset-data-btn" class="settings-btn" type="button" style="color:#c62828;border-color:#ffcdd2;">重置</button>
           </div>
         </div>
+
+        <!-- Version ID Display -->
+        <div class="version-info" id="version-display">
+            v202511271410
+        </div>
       </section>
     </main>
 
@@ -655,11 +672,13 @@
 
   <script type="module">
     // -----------------------------------------------------------
-    // 1. Firebase 初始化 (Phase 1)
+    // 1. Firebase 初始化 & Phase 2: Migration/Listeners
     // -----------------------------------------------------------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+    const APP_VERSION = "202511271410";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -672,39 +691,163 @@
 
     let app, db, auth;
     const dbStatusEl = document.getElementById('db-status');
+    const versionEl = document.getElementById('version-display');
+    if(versionEl) versionEl.textContent = "v" + APP_VERSION;
 
-    try {
-        app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-        
-        // 嘗試簡單的匿名登入以確認連線權限 (非強制，但建議)
-        signInAnonymously(auth).then(() => {
-            console.log("Firebase Auth (Anon) Success");
+    // --- Global State ---
+    var STORAGE_KEY = 'family_points_data_v11'; 
+    var defaultRules = [{ threshold: 3, points: 2 }, { threshold: 1, points: 1 }];
+    var rulesState = JSON.parse(JSON.stringify(defaultRules));
+    
+    var defaultCommonTasks = [
+      { id: 'dress', name: '自己穿好衣服' },
+      { id: 'hw',    name: '寫完回家作業' },
+      { id: 'toys',  name: '睡前收玩具' }
+    ];
+
+    var defaultKidsState = {
+      leo: {
+        key: 'leo', displayName: 'Leo', avatar: 'L', slogan: '今天一起加油 💪', theme: 'boy',
+        totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
+      },
+      natasha: {
+        key: 'natasha', displayName: 'Natasha', avatar: 'N', slogan: '一起開心玩耍 🌈', theme: 'girl',
+        totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
+      }
+    };
+    var kidsState = JSON.parse(JSON.stringify(defaultKidsState));
+    var currentKid = 'leo';
+    var currentViewWeekKey = getCurrentWeekKey();
+
+    // -----------------------------------------------------------
+    // Initialization Logic
+    // -----------------------------------------------------------
+    async function initApp() {
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            // 1. Auth First
+            await signInAnonymously(auth);
+            console.log("Firebase Auth Success");
             updateConnectionStatus('online');
-        }).catch((e) => {
-            console.warn("Auth warning:", e);
-            // 就算 Auth 失敗，如果只是純連線檢查，我們先顯示綠燈，真正讀寫失敗再轉紅
-            updateConnectionStatus('online'); 
+
+            // 2. Migration Check
+            await checkAndMigrateData();
+
+            // 3. Setup Listeners
+            setupRealtimeListeners();
+
+        } catch (e) {
+            console.error("Firebase Init/Auth Error:", e);
+            updateConnectionStatus('offline');
+            // Fallback: load local data if cloud fails
+            loadLocalDataOnly();
+            renderAll();
+        }
+    }
+
+    // 檢查雲端是否為空，若是則上傳 LocalStorage 資料
+    async function checkAndMigrateData() {
+        try {
+            const kidsRef = collection(db, 'kids');
+            const snapshot = await getDocs(kidsRef);
+
+            if (snapshot.empty) {
+                console.log("Cloud is empty. Migrating local data...");
+                updateConnectionStatus('syncing');
+
+                // 先讀取本地資料
+                loadLocalDataOnly(); 
+
+                // 上傳 Kids
+                const uploadPromises = Object.values(kidsState).map(kid => {
+                    return setDoc(doc(db, 'kids', kid.key), kid);
+                });
+
+                // 上傳 Rules (放在 settings/rules 文件中)
+                const rulesPromise = setDoc(doc(db, 'settings', 'rules'), { list: rulesState });
+
+                await Promise.all([...uploadPromises, rulesPromise]);
+                console.log("Migration Complete!");
+                showToast("雲端初始化完成 (已上傳本地資料)");
+                updateConnectionStatus('online');
+            } else {
+                console.log("Cloud data found. Skipping migration.");
+            }
+        } catch (e) {
+            console.error("Migration failed:", e);
+        }
+    }
+
+    // 設定監聽器：當雲端資料變更時，自動更新本地變數並重繪
+    function setupRealtimeListeners() {
+        // 1. Listen to Kids Collection
+        onSnapshot(collection(db, 'kids'), (snapshot) => {
+            if(snapshot.empty) return; // Should not happen after migration
+            
+            // Rebuild kidsState from snapshot
+            const newKidsState = {};
+            snapshot.forEach(doc => {
+                newKidsState[doc.id] = doc.data();
+            });
+            
+            // Merge logic: ensure we keep the current structure valid
+            // (e.g., if a new kid is added remotely)
+            kidsState = newKidsState;
+            
+            // 如果當前選的小孩被刪除了，切換到第一個
+            if (!kidsState[currentKid]) {
+                const keys = Object.keys(kidsState);
+                if(keys.length > 0) currentKid = keys[0];
+            }
+
+            console.log("Received update from Firestore (Kids)");
+            renderAll();
+        }, (error) => {
+            console.error("Listen failed:", error);
+            updateConnectionStatus('offline');
         });
 
-    } catch (e) {
-        console.error("Firebase Init Error:", e);
-        updateConnectionStatus('offline');
+        // 2. Listen to Rules
+        onSnapshot(doc(db, 'settings', 'rules'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.list) {
+                    rulesState = data.list;
+                    console.log("Received update from Firestore (Rules)");
+                    renderAll();
+                }
+            }
+        });
+    }
+
+    function loadLocalDataOnly() {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            try {
+                var data = JSON.parse(raw);
+                if (data.kids) kidsState = data.kids;
+                if (data.rules) rulesState = data.rules;
+            } catch (e) { console.error('Local Load failed', e); }
+        }
     }
 
     function updateConnectionStatus(status) {
         if(dbStatusEl) {
-            dbStatusEl.className = 'connection-dot ' + status;
-            dbStatusEl.title = status === 'online' ? "已連線到雲端" : "離線 / 連線失敗";
+            let className = 'connection-dot ' + status;
+            dbStatusEl.className = className;
+            if(status === 'online') dbStatusEl.title = "已連線到雲端 (監聽中)";
+            else if(status === 'syncing') dbStatusEl.title = "資料同步中...";
+            else dbStatusEl.title = "離線 / 連線失敗";
         }
     }
 
     // -----------------------------------------------------------
-    // 2. 原有程式邏輯 (適配 Module)
+    // 2. 原有程式邏輯 (Helper Functions)
     // -----------------------------------------------------------
 
-    // 強力禁止縮放邏輯
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
@@ -814,44 +957,13 @@
         return (monday.getMonth()+1) + '/' + monday.getDate() + " ～ " + (sunday.getMonth()+1) + '/' + sunday.getDate();
     }
 
-    var currentViewWeekKey = getCurrentWeekKey();
-
-    var STORAGE_KEY = 'family_points_data_v11'; 
-    
-    var defaultRules = [
-      { threshold: 3, points: 2 }, 
-      { threshold: 1, points: 1 }
-    ];
-    var rulesState = JSON.parse(JSON.stringify(defaultRules));
-    
-    var defaultCommonTasks = [
-      { id: 'dress', name: '自己穿好衣服' },
-      { id: 'hw',    name: '寫完回家作業' },
-      { id: 'toys',  name: '睡前收玩具' }
-    ];
-
-    var defaultKidsState = {
-      leo: {
-        key: 'leo', displayName: 'Leo', avatar: 'L', slogan: '今天一起加油 💪', theme: 'boy',
-        totalPoints: 0,
-        dataByWeek: {}, 
-        history: [],
-        tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
-      },
-      natasha: {
-        key: 'natasha', displayName: 'Natasha', avatar: 'N', slogan: '一起開心玩耍 🌈', theme: 'girl',
-        totalPoints: 0,
-        dataByWeek: {},
-        history: [],
-        tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
-      }
-    };
-
-    var kidsState = JSON.parse(JSON.stringify(defaultKidsState));
-    var currentKid = 'leo';
-
+    // Phase 2: Save Data is still LOCAL ONLY (Cloud Write is Phase 3)
     function saveData() {
-      // Phase 1: 仍然寫入 LocalStorage，Phase 3 才會改寫入 Firestore
+      // 仍然寫入 LocalStorage 作為備份，並提供 "UI 反應"
+      // 注意：因為現在有 onSnapshot，如果這裡不寫入雲端，
+      // 而雲端監聽器又觸發了更新（例如重新連線取得舊資料），
+      // UI 可能會跳回雲端的狀態。這是預期的，因為雲端是 Source of Truth。
+      // 在第三階段我們會在這裡加入 setDoc/updateDoc
       var data = { kids: kidsState, rules: rulesState };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       triggerSaveIndicator();
@@ -886,36 +998,7 @@
         return score;
     }
 
-    function loadData() {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        try {
-          var data = JSON.parse(raw);
-          var legacyTasks = data.tasks || defaultCommonTasks;
-          if (data.kids) {
-             Object.keys(data.kids).forEach(k => {
-                 var kid = data.kids[k];
-                 if(!kid.dataByWeek) kid.dataByWeek = {};
-                 Object.keys(kid.dataByWeek).forEach(weekKey => {
-                     var weekData = kid.dataByWeek[weekKey];
-                     if(!weekData.status) weekData.status = [{},{},{},{},{},{},{}];
-                     if (!weekData.ruleScores) {
-                         weekData.ruleScores = [0,0,0,0,0,0,0];
-                         for(var i=0; i<7; i++) {
-                             weekData.ruleScores[i] = computeRuleScoreForDay(weekData.status[i]);
-                         }
-                     }
-                 });
-                 if (!kid.tasks) kid.tasks = JSON.parse(JSON.stringify(legacyTasks));
-             });
-             kidsState = data.kids;
-          }
-          if (data.rules && Array.isArray(data.rules)) {
-              rulesState = data.rules;
-          }
-        } catch (e) { console.error('Load failed', e); }
-      }
-    }
+    // loadData is removed/replaced by initApp & setupRealtimeListeners
 
     function performReset() {
       localStorage.removeItem(STORAGE_KEY);
@@ -924,7 +1007,7 @@
       currentKid = 'leo';
       currentViewWeekKey = getCurrentWeekKey(); 
       renderAll();
-      showToast('資料已重置');
+      showToast('本地資料已重置 (雲端資料未變更)');
     }
     
     function handleTestDataGen() {
@@ -1081,6 +1164,12 @@
     }
 
     function renderCurrentKid() {
+        // Safety check if kid was deleted remotely
+        if (!kidsState[currentKid]) {
+            if(Object.keys(kidsState).length > 0) currentKid = Object.keys(kidsState)[0];
+            else return; // No kids data
+        }
+
         var kid = kidsState[currentKid];
         kidNameEl.textContent = kid.displayName;
         // 注意：這裡不能直接蓋掉 avatarEl.innerHTML，因為會把連線燈號刪掉
@@ -1117,6 +1206,7 @@
     }
 
     function renderWeekTable() {
+        if (!kidsState[currentKid]) return;
         var kid = kidsState[currentKid];
         var table = document.getElementById('week-table');
         table.innerHTML = '';
@@ -1303,6 +1393,7 @@
     });
 
     function renderHistoryList() {
+        if (!kidsState[currentKid]) return;
         var kid = kidsState[currentKid];
         historyCard.innerHTML = '';
         
@@ -1378,6 +1469,7 @@
     }
 
     function renderSettingsTaskList() {
+        if (!kidsState[currentKid]) return;
         var kid = kidsState[currentKid];
         settingsTaskListEl.innerHTML = '';
         kid.tasks.forEach(function(t) {
@@ -1480,7 +1572,9 @@
     function deleteKid(key) {
         delete kidsState[key];
         if (currentKid === key) {
-            currentKid = Object.keys(kidsState)[0];
+            const keys = Object.keys(kidsState);
+            if(keys.length > 0) currentKid = keys[0];
+            else currentKid = null;
         }
         saveData();
         renderAll();
@@ -1553,6 +1647,7 @@
 
     switchBtn.addEventListener('click', function() {
         var keys = Object.keys(kidsState);
+        if(keys.length === 0) return;
         var idx = keys.indexOf(currentKid);
         var nextIdx = (idx + 1) % keys.length;
         currentKid = keys[nextIdx];
@@ -1560,6 +1655,7 @@
     });
 
     function openWeekSelectModal() {
+        if (!kidsState[currentKid]) return;
         weekListContainer.innerHTML = '';
         var kid = kidsState[currentKid];
         var weeks = Object.keys(kid.dataByWeek).sort().reverse();
@@ -1590,15 +1686,14 @@
     }
 
     // -----------------------------------------------------------
-    // 3. 綁定 Window 全域變數 (因為 HTML onclick 需要)
+    // 3. 綁定 Window 全域變數 & 啟動
     // -----------------------------------------------------------
     window.handleQuickAdd = handleQuickAdd;
     window.openWeekSelectModal = openWeekSelectModal;
     window.closeWeekSelectModal = closeWeekSelectModal;
     
     // 初始化執行
-    loadData();
-    renderAll();
+    initApp();
   </script>
 </body>
 </html>
