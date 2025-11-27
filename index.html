@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v4.6 (連線狀態修復版)</title>
+  <title>家用點數任務板 v4.8 (自動偵測更新)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -354,6 +354,30 @@
 
     #toast-msg { pointer-events: none; }
 
+    /* New Update Banner */
+    #update-banner {
+        display: none;
+        position: fixed;
+        bottom: 70px; /* Above nav bar */
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 50px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        animation: slideUp 0.5s ease;
+    }
+    @keyframes slideUp {
+        from { transform: translate(-50%, 20px); opacity: 0; }
+        to { transform: translate(-50%, 0); opacity: 1; }
+    }
+
     .modal-overlay {
       display: none;
       position: fixed;
@@ -645,6 +669,14 @@
           
           <div class="settings-item">
             <div>
+              <div class="settings-label" style="color:#333;">🔄 強制更新頁面</div>
+              <div class="settings-sub">如果發現功能異常或版本過舊，請點此重整。</div>
+            </div>
+            <button onclick="window.location.reload(true)" class="settings-btn" type="button">重整</button>
+          </div>
+
+          <div class="settings-item">
+            <div>
               <div class="settings-label" style="color:#c62828;">重置/登出</div>
               <div class="settings-sub">清除家庭代號與本地紀錄 (雲端資料保留)。</div>
             </div>
@@ -654,7 +686,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271550
+            v202511271640
         </div>
       </section>
     </main>
@@ -677,6 +709,11 @@
         設定
       </div>
     </nav>
+
+    <!-- Update Notification Banner -->
+    <div id="update-banner" onclick="window.location.reload(true)">
+        🚀 發現新版本！點此更新
+    </div>
 
     <!-- 編輯小孩 Modal -->
     <div class="modal-overlay" id="edit-kid-modal">
@@ -751,7 +788,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271550";
+    const APP_VERSION = "202511271640";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -769,6 +806,7 @@
 
     const dbStatusEl = document.getElementById('db-status');
     const versionEl = document.getElementById('version-display');
+    const updateBanner = document.getElementById('update-banner');
     
     // --- Global State ---
     var STORAGE_KEY = 'family_points_data_v11';
@@ -807,9 +845,46 @@
     var currentViewWeekKey = getCurrentWeekKey();
 
     // -----------------------------------------------------------
+    // Update Checker Logic
+    // -----------------------------------------------------------
+    async function checkForUpdates() {
+        try {
+            // Fetch own URL with cache buster
+            const url = window.location.href.split('#')[0] + '?t=' + Date.now();
+            const response = await fetch(url, { cache: "no-store" });
+            const text = await response.text();
+            
+            // Extract APP_VERSION from fetched HTML
+            const match = text.match(/const APP_VERSION = "(\d+)";/);
+            if (match && match[1]) {
+                const latestVersion = match[1];
+                if (latestVersion !== APP_VERSION) {
+                    console.log(`New version found: ${latestVersion} (Current: ${APP_VERSION})`);
+                    if(updateBanner) {
+                        updateBanner.innerHTML = `🚀 發現新版本 (v${latestVersion.slice(-4)})！點此更新`;
+                        updateBanner.style.display = 'block';
+                    }
+                }
+            }
+        } catch (e) {
+            console.log("Update check failed (offline?)", e);
+        }
+    }
+
+    // -----------------------------------------------------------
     // Initialization Logic
     // -----------------------------------------------------------
     async function initApp() {
+        // Run update check immediately
+        checkForUpdates();
+        
+        // Listen for visibility change (when user switches back to app)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                checkForUpdates();
+            }
+        });
+
         // Step 0: Check Family ID before anything else
         if (!currentFamilyId) {
             showLoginModal();
