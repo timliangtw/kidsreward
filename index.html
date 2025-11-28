@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v5.7 (備份狀態雲端同步)</title>
+  <title>家用點數任務板 v6.0 (馬力歐金幣音效版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -766,7 +766,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271955
+            v202511272110
         </div>
       </section>
     </main>
@@ -887,7 +887,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271955";
+    const APP_VERSION = "202511272110";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -902,7 +902,7 @@
     // Fix: Add global listener variables to handle unsubscription
     let unsubscribeKids = null;
     let unsubscribeRules = null;
-    let unsubscribeBackup = null; // New
+    let unsubscribeBackup = null; 
 
     const dbStatusEl = document.getElementById('db-status');
     const versionEl = document.getElementById('version-display');
@@ -916,6 +916,103 @@
     
     // Default local state for backup before sync
     var backupSettings = { cycle: 7, lastBackup: 0, email: '' };
+
+    // --- Sound Generators ---
+    // Pre-generate simple WAV blobs for iOS compatibility (Media Playback)
+    // Using low-level WAV construction to avoid external assets
+    function createBeepURL(type) {
+        const sampleRate = 44100;
+        let duration = 0.4; 
+        if(type === 'coin') duration = 0.4;
+        if(type === 'deduct') duration = 0.3;
+        
+        const frameCount = sampleRate * duration;
+        let buffer = new Float32Array(frameCount);
+        let phase = 0;
+        
+        for (let i = 0; i < frameCount; i++) {
+            let t = i / sampleRate;
+            let currentFreq = 440;
+            let currentVol = 0.1;
+
+            if(type === 'coin') { // Super Mario Coin Style
+                // B5 (988Hz) -> E6 (1319Hz)
+                if (t < 0.06) {
+                    currentFreq = 988;
+                    currentVol = 0.1; 
+                } else {
+                    currentFreq = 1319;
+                    // Quick decay
+                    let progress = (t - 0.06) / (duration - 0.06);
+                    currentVol = 0.1 * (1 - progress); 
+                }
+            } else if(type === 'deduct') { // Slide down
+                currentFreq = 200 * (1 - (i/frameCount));
+                currentVol = 0.1 * (1 - (i/frameCount));
+            }
+
+            phase += (currentFreq * 2 * Math.PI) / sampleRate;
+            // Square wave
+            buffer[i] = (Math.sin(phase) > 0 ? 1 : -1) * currentVol; 
+        }
+
+        // Encode to WAV
+        const wavBuffer = new ArrayBuffer(44 + frameCount * 2);
+        const view = new DataView(wavBuffer);
+
+        // RIFF
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + frameCount * 2, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true); 
+        view.setUint16(20, 1, true); 
+        view.setUint16(22, 1, true); 
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true); 
+        view.setUint16(34, 16, true); 
+        writeString(view, 36, 'data');
+        view.setUint32(40, frameCount * 2, true);
+
+        let offset = 44;
+        for (let i = 0; i < frameCount; i++) {
+            let s = Math.max(-1, Math.min(1, buffer[i]));
+            s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            view.setInt16(offset, s, true);
+            offset += 2;
+        }
+
+        const blob = new Blob([view], { type: 'audio/wav' });
+        return URL.createObjectURL(blob);
+    }
+
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+
+    // Preload sounds
+    const coinSoundUrl = createBeepURL('coin');
+    const deductSoundUrl = createBeepURL('deduct');
+
+    function playCoinSound() {
+        new Audio(coinSoundUrl).play().catch(e => console.log("Audio play prevented"));
+    }
+    function playDeductSound() {
+        new Audio(deductSoundUrl).play().catch(e => console.log("Audio play prevented"));
+    }
+    function showCoinAnimation() {
+        var coin = document.getElementById('coin-effect');
+        if(coin) { coin.classList.remove('animate'); void coin.offsetWidth; coin.classList.add('animate'); }
+    }
+    function showDeductAnimation() {
+        var elem = document.getElementById('deduct-effect');
+        if(elem) { elem.classList.remove('animate'); void elem.offsetWidth; elem.classList.add('animate'); }
+    }
+
+    // --- End Sound Generators ---
 
     if(versionEl) {
         let displayVer = "v" + APP_VERSION;
@@ -1399,44 +1496,8 @@
       setTimeout(function() { toast.style.opacity = '0'; }, 2000);
     }
     
-    function playCoinSound() {
-        var AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContext) return;
-        var ctx = new AudioContext();
-        var osc = ctx.createOscillator();
-        var gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(987.77, ctx.currentTime); 
-        osc.frequency.setValueAtTime(1318.51, ctx.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-        osc.start(); osc.stop(ctx.currentTime + 0.4);
-    }
-    function showCoinAnimation() {
-        var coin = document.getElementById('coin-effect');
-        if(coin) { coin.classList.remove('animate'); void coin.offsetWidth; coin.classList.add('animate'); }
-    }
-    function playDeductSound() {
-        var AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContext) return;
-        var ctx = new AudioContext();
-        var osc = ctx.createOscillator();
-        var gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.start(); osc.stop(ctx.currentTime + 0.3);
-    }
-    function showDeductAnimation() {
-        var elem = document.getElementById('deduct-effect');
-        if(elem) { elem.classList.remove('animate'); void elem.offsetWidth; elem.classList.add('animate'); }
-    }
+    // Note: These functions (playCoinSound, playDeductSound) are now replaced by the generated WAV versions above.
+    // The visual effect functions remain the same.
 
     var navItems = document.querySelectorAll('.nav-item');
     var pages = document.querySelectorAll('.tab-page');
