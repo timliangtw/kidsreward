@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v6.3 (算分邏輯修復版)</title>
+  <title>家用點數任務板 v6.4 (快速加扣連動版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -782,7 +782,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v6.3
+            v6.4
         </div>
       </section>
     </main>
@@ -903,7 +903,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511272130";
+    const APP_VERSION = "202511281436";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -2103,10 +2103,26 @@
     function handleQuickAdd(val) {
         var kid = kidsState[currentKid];
         var note = quickNoteInput.value.trim();
+        
+        // 1. Update Global Total
         kid.totalPoints += val;
+
+        // 2. Update Daily Summary for TODAY
+        var today = new Date();
+        var dayIdx = getTodayColumnIndex(); 
+        var thisWeekKey = getCurrentWeekKey();
+        var weekData = getWeekData(kid, thisWeekKey);
+        
+        // Ensure summary array exists
+        if (!weekData.summary) weekData.summary = [0,0,0,0,0,0,0];
+        
+        // Add value to today's summary slot
+        weekData.summary[dayIdx] = (weekData.summary[dayIdx] || 0) + val;
+
+        // 3. Add to History
         kid.history.push({
             id: Date.now().toString(),
-            date: formatDateKey(new Date()), // Use local date
+            date: formatDateKey(today), // Use local date
             item: '快速加扣',
             delta: val,
             note: note || (val > 0 ? '手動加點' : '手動扣點')
@@ -2116,11 +2132,11 @@
         if (val > 0) {
             showCoinAnimation();
             playCoinSound();
-            showToast('加點成功！');
+            showToast('加點成功！(已計入本日小計)');
         } else {
             showDeductAnimation();
             playDeductSound();
-            showToast('已扣點');
+            showToast('已扣點 (已計入本日小計)');
         }
         saveData('kid', currentKid);
         renderAll();
