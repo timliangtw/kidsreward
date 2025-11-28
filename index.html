@@ -2,20 +2,19 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v6.6 (刪除回朔修正)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>家用點數任務板 v6.7 (全介面凍結版)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
-    /* 禁止縮放 */
+    /* 1. 設定滿版高度並禁止 Body 捲動 */
     html, body { 
         touch-action: manipulation; 
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; 
         background: #f5f5f7; 
-        overflow-x: hidden; 
-        -webkit-user-select: none;
-        user-select: none;
-        min-height: 100%;
+        overflow: hidden; /* 關鍵：禁止外層捲動 */
+        height: 100%;
+        width: 100%;
     }
 
     input {
@@ -25,25 +24,40 @@
 
     body { font-size: 18px; }
 
+    /* 2. App 容器設定 */
     .app {
       max-width: 480px;
-      margin: 16px auto;
+      height: 100%;        /* 佔滿高度 */
+      max-height: 100dvh;  /* 支援手機動態網址列高度 */
+      margin: 0 auto;
       background: white;
-      border-radius: 24px;
-      box-shadow: 0 0 12px rgba(0,0,0,0.12);
-      overflow: hidden;
+      /* 移除圓角和外距，讓它在手機上看起來更像原生 App，或者在桌機上維持置中 */
+      /* 如果希望桌機有邊框，可以保留 max-width，但在手機上滿版體驗較好 */
+      position: relative; 
       display: flex;
       flex-direction: column;
-      min-height: 88vh;
-      position: relative; 
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+    
+    /* 桌機版稍作修飾 (大螢幕時才顯示圓角) */
+    @media (min-width: 500px) {
+        .app {
+            height: 90vh;
+            margin: 5vh auto;
+            border-radius: 24px;
+            overflow: hidden; /* 確保圓角內內容不溢出 */
+        }
     }
 
     .app.boy header { background: linear-gradient(135deg,#4f8cf7,#7ab8ff); }
     .app.girl header { background: linear-gradient(135deg,#ff7eb3,#ff9a9e); }
 
+    /* 3. Header 固定 (Flex item 不縮放) */
     header {
       color: white;
       padding: 18px 18px 14px;
+      flex-shrink: 0; /* 關鍵：不會因為內容多而被擠壓 */
+      z-index: 50;
     }
     .header-top { display:flex; justify-content:space-between; align-items:center; }
     .kid-main { display:flex; align-items:center; gap:10px; }
@@ -59,7 +73,7 @@
       font-size: 22px;
       color: #333;
       flex-shrink: 0;
-      position: relative; /* For connection dot positioning */
+      position: relative; 
     }
 
     /* 連線狀態燈號 */
@@ -69,7 +83,7 @@
         right: 0;
         width: 14px;
         height: 14px;
-        background-color: #ccc; /* Default gray */
+        background-color: #ccc; 
         border: 2px solid #fff;
         border-radius: 50%;
         transition: background-color 0.3s ease, transform 0.3s ease;
@@ -156,11 +170,15 @@
         font-weight: 500;
     }
 
+    /* 4. Main 內容區設定為可捲動 */
     main {
-      padding: 10px 16px 12px;
-      flex: 1;
-      overflow-y: auto;
+      padding: 10px 16px 20px; /* 增加底部 padding 避免內容貼底 */
+      flex: 1; /* 佔滿剩餘空間 */
+      overflow-y: auto; /* 關鍵：只有這裡可以捲動 */
+      -webkit-overflow-scrolling: touch; /* 讓 iOS 捲動更滑順 */
+      scroll-behavior: smooth;
     }
+
     h2 { font-size: 18px; margin: 10px 0 6px; }
     .card {
       background:#fff;
@@ -174,7 +192,7 @@
       overflow-x:auto;
       padding-bottom: 6px;
       position: relative;
-      scroll-behavior: smooth; 
+      /* 移除上次的高度限制，因為現在是整個 main 在捲動 */
     }
     .week-table {
       min-width: 640px; 
@@ -189,7 +207,18 @@
       gap: 6px;
       font-size: 14px;
     }
-    .week-header { font-weight:700; margin-bottom:6px; }
+    
+    /* 這裡維持 Sticky，讓表格標題在 Main 捲動時也黏在 Main 的頂部 */
+    .week-header { 
+        font-weight:700; 
+        padding-bottom:8px;
+        margin-bottom: 0;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: #fff;
+        border-bottom: 1px solid #eee;
+    }
     
     .task-name-header, .task-name, .task-name-summary {
       flex:0 0 120px;
@@ -206,6 +235,9 @@
       display: flex;
       align-items: center;
     }
+    
+    .task-name-header { z-index: 30; }
+    .task-name-summary { z-index: 30; }
     
     .week-list-item {
         padding: 12px;
@@ -262,9 +294,8 @@
       border-color: #ffcdd2;
       color: #c62828;
     }
-    /* Bonus Task Styling */
     .task-row.bonus-row .custom-check.checked {
-        background: #ff9800; /* Orange/Gold for Bonus */
+        background: #ff9800; 
         border-color: #ff9800;
     }
     .bonus-separator {
@@ -280,12 +311,21 @@
     }
 
     .task-row { margin-bottom:6px; }
+    
+    /* 下方小計列也黏在底部 (相對於表格) */
+    /* 備註：因為現在 main 可以捲動，如果表格很長，這個會黏在表格視窗底部 */
     .day-summary-row {
-      margin-top:4px;
-      padding-top:4px;
-      border-top:1px dashed #eee;
+      margin-top: 0;
+      padding-top: 8px;
+      padding-bottom: 4px;
+      border-top: 2px solid #eee;
       font-size:13px;
       color:#555;
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+      background: #fff;
+      box-shadow: 0 -2px 4px rgba(0,0,0,0.02);
     }
     .day-summary-cell-positive { color:#2e7d32; font-weight:600; }
     .day-summary-cell-negative { color:#c62828; font-weight:600; }
@@ -350,12 +390,16 @@
 
     .tab-page { display:none; }
     .tab-page.active { display:block; }
+    
+    /* 5. Nav 固定在底部 (Flex item 不縮放) */
     nav {
       display:flex;
       justify-content:space-around;
       border-top:1px solid #ddd;
       background:#fff;
       padding-bottom: env(safe-area-inset-bottom);
+      flex-shrink: 0; /* 關鍵：固定 */
+      z-index: 50;
     }
     .nav-item {
       flex:1;
@@ -364,12 +408,11 @@
       font-size: 14px;
       cursor:pointer;
       color:#777;
-      position: relative; /* For notification dot */
+      position: relative; 
     }
     .nav-icon { display:block; font-size: 20px; margin-bottom:2px; }
     .nav-item.active { color:#3366cc; font-weight:600; }
 
-    /* Notification Red Dot */
     .nav-notification {
         position: absolute;
         top: 8px;
@@ -379,17 +422,16 @@
         background-color: #f44336;
         border-radius: 50%;
         border: 2px solid #fff;
-        display: none; /* Hidden by default */
+        display: none; 
     }
     .nav-notification.show { display: block; }
 
     #toast-msg { pointer-events: none; }
 
-    /* New Update Banner */
     #update-banner {
         display: none;
         position: fixed;
-        bottom: 70px; /* Above nav bar */
+        bottom: 70px; 
         left: 50%;
         transform: translateX(-50%);
         background: #333;
@@ -776,7 +818,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v6.6
+            v6.7
         </div>
       </section>
     </main>
@@ -896,7 +938,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511281518"; // New Version
+    const APP_VERSION = "202511281530"; // New Version
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
