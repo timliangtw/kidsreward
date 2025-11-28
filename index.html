@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v6.0 (馬力歐金幣音效版)</title>
+  <title>家用點數任務板 v6.3 (算分邏輯修復版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -610,6 +610,22 @@
           <div class="small-label">備註（選填，記錄原因）</div>
           <input class="small-input" id="quick-note-input" placeholder="例：今天主動幫忙收玩具 +1 點" />
         </div>
+
+        <!-- New Bulk Action Section -->
+        <h2>大量加 / 扣點</h2>
+        <div class="card" id="bulk-points-card">
+            <div class="small-label">輸入點數</div>
+            <input id="bulk-points-input" type="number" inputmode="numeric" pattern="[0-9]*" class="small-input" placeholder="輸入數字，例如 10, 50..." />
+            
+            <div class="small-label">備註（選填）</div>
+            <input id="bulk-note-input" class="small-input" placeholder="原因，例如：期末考滿分" />
+
+            <div class="quick-row" style="margin-top:10px;">
+                 <button class="pill-btn pill-plus" type="button" onclick="handleBulkAction(1)">大量加點 (+)</button>
+                 <button class="pill-btn pill-minus" type="button" onclick="handleBulkAction(-1)">大量扣點 (-)</button>
+            </div>
+        </div>
+
       </section>
 
       <section class="tab-page" data-tab="rewards">
@@ -766,7 +782,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511272110
+            v6.3
         </div>
       </section>
     </main>
@@ -887,7 +903,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511272110";
+    const APP_VERSION = "202511272130";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -1224,6 +1240,59 @@
             // Clear input
             restoreFileInput.value = '';
         });
+    }
+    
+    // Bulk Action Logic
+    var bulkPointsInput = document.getElementById('bulk-points-input');
+    var bulkNoteInput = document.getElementById('bulk-note-input');
+
+    function handleBulkAction(multiplier) {
+        var kid = kidsState[currentKid];
+        var pointsStr = bulkPointsInput.value;
+        var points = parseInt(pointsStr);
+        var note = bulkNoteInput.value.trim();
+
+        if (!pointsStr || isNaN(points) || points <= 0) {
+            alert('請輸入有效的數字');
+            return;
+        }
+
+        var delta = points * multiplier;
+        
+        // Update total points
+        kid.totalPoints += delta;
+
+        // Add to history
+        kid.history.push({
+            id: Date.now().toString(),
+            date: formatDateKey(new Date()), // Use local date
+            item: multiplier > 0 ? '大量加點' : '大量扣點',
+            delta: delta,
+            note: note || (multiplier > 0 ? '表現優異' : '違規扣點')
+        });
+
+        // Play sound sequence (limit to 15 to avoid noise)
+        var count = Math.min(points, 15); 
+        var interval = 150; // ms between beeps
+        
+        for (let i = 0; i < count; i++) {
+            setTimeout(() => {
+                if (multiplier > 0) playCoinSound();
+                else playDeductSound();
+            }, i * interval);
+        }
+        
+        // Visual effect
+        if (multiplier > 0) showCoinAnimation();
+        else showDeductAnimation();
+
+        // Clear inputs
+        bulkPointsInput.value = '';
+        bulkNoteInput.value = '';
+
+        saveData('kid', currentKid);
+        renderAll();
+        showToast(multiplier > 0 ? `已加 ${points} 點！` : `已扣 ${points} 點`);
     }
 
     // -----------------------------------------------------------
@@ -1578,6 +1647,9 @@
         }
     }
 
+    // =====================================================================
+    // CRITICAL FIX: Restored Calculation Functions (Missing in v6.2)
+    // =====================================================================
     function calculateDailyScoreDetail(kid, weekKey, dayIndex) {
         // New combined calculation function
         var weekData = getWeekData(kid, weekKey);
@@ -1628,12 +1700,11 @@
       return calculateDailyScoreDetail(kid, weekKey, dayIndex).total;
     }
 
-    // Keep this for visual consistency in rendering (though calculateDailyScoreDetail does the real work now)
     function computeRuleScoreForDay(dayStatus) {
-        // This old function is less useful now, logic moved to calculateDailyScoreDetail
-        // Kept just in case, but essentially deprecated by new logic
+        // Deprecated logic kept for reference if needed, but unused by main flow
         return 0; 
     }
+    // =====================================================================
 
     function performReset() {
       // Logout logic
@@ -2473,6 +2544,7 @@
     // 3. 綁定 Window 全域變數 & 啟動
     // -----------------------------------------------------------
     window.handleQuickAdd = handleQuickAdd;
+    window.handleBulkAction = handleBulkAction; // Expose this
     window.openWeekSelectModal = openWeekSelectModal;
     window.closeWeekSelectModal = closeWeekSelectModal;
     
