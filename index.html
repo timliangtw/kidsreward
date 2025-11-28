@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v6.7 (全介面凍結版)</title>
+  <title>家用點數任務板 v6.8 (總分顯示x10)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -818,7 +818,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v6.7
+            v6.8
         </div>
       </section>
     </main>
@@ -938,7 +938,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511281530"; // New Version
+    const APP_VERSION = "202511281545"; // New Version
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -1666,10 +1666,13 @@
         kidSubEl.textContent = kid.slogan;
         appEl.classList.remove('boy', 'girl');
         appEl.classList.add(kid.theme);
-        totalPointsEl.innerHTML = '<span>⭐</span><span>' + kid.totalPoints + ' 點</span>';
         
+        // MODIFICATION: Total Points Display x10
+        totalPointsEl.innerHTML = '<span>⭐</span><span>' + (kid.totalPoints * 10) + ' 點</span>';
+        
+        // MODIFICATION: Weekly Points Display x10
         const weeklyScore = calculateWeeklyGridPoints(kid, currentViewWeekKey);
-        weeklyPointsEl.textContent = `本週：${weeklyScore} 點`;
+        weeklyPointsEl.textContent = `本週：${weeklyScore * 10} 點`;
 
         dateChipEl.textContent = '週次：' + getWeekRangeString(currentViewWeekKey);
         var thisWeek = getCurrentWeekKey();
@@ -1682,8 +1685,11 @@
             viewLabelEl.style.color = "#c62828";
             historyWeekLabel.textContent = `(${getWeekRangeString(currentViewWeekKey)})`;
         }
+        
         redeemKidNameEl.textContent = kid.displayName;
-        redeemKidPointsEl.textContent = kid.totalPoints;
+        // MODIFICATION: Redeem Page Total Points Display x10
+        redeemKidPointsEl.textContent = kid.totalPoints * 10;
+        
         if(settingsTaskKidLabel) settingsTaskKidLabel.textContent = "(管理對象：" + kid.displayName + ")";
     }
 
@@ -2088,7 +2094,10 @@
             var item = document.createElement('div');
             item.className = 'settings-item';
             var infoDiv = document.createElement('div');
-            infoDiv.innerHTML = '<span style="font-weight:600">'+k.displayName+'</span> <span style="font-size:12px;color:#888">('+k.totalPoints+'點)</span>';
+            
+            // MODIFICATION: Kid List Points Display x10
+            infoDiv.innerHTML = '<span style="font-weight:600">'+k.displayName+'</span> <span style="font-size:12px;color:#888">('+(k.totalPoints * 10)+'點)</span>';
+            
             var btnDiv = document.createElement('div');
             btnDiv.style.display = 'flex';
             btnDiv.style.gap = '8px';
