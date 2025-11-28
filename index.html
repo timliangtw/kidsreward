@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v5.1 (新增編輯任務)</title>
+  <title>家用點數任務板 v5.5 (完整修復版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -261,6 +261,22 @@
       background: #ffebee;
       border-color: #ffcdd2;
       color: #c62828;
+    }
+    /* Bonus Task Styling */
+    .task-row.bonus-row .custom-check.checked {
+        background: #ff9800; /* Orange/Gold for Bonus */
+        border-color: #ff9800;
+    }
+    .bonus-separator {
+        padding: 8px 0;
+        text-align: center;
+        font-size: 12px;
+        color: #888;
+        background: #fafafa;
+        margin: 4px 0;
+        border-radius: 4px;
+        font-weight: bold;
+        letter-spacing: 1px;
     }
 
     .task-row { margin-bottom:6px; }
@@ -614,19 +630,31 @@
         <h2>小孩管理</h2>
         <div class="card settings-group" id="settings-kid-list"></div>
 
-        <h2>任務管理 <span id="settings-task-kid-label" style="font-size:14px; color:#666; font-weight:normal;"></span></h2>
+        <h2>一般任務管理 <span id="settings-task-kid-label" style="font-size:14px; color:#666; font-weight:normal;"></span></h2>
         <div class="card settings-group">
           <div id="settings-task-list"></div>
           <div class="settings-item">
             <div style="width: 100%; padding-right: 10px;">
-              <div class="settings-label">新增任務</div>
+              <div class="settings-label">新增一般任務</div>
               <input id="settings-new-task-input" class="small-input" placeholder="例：主動幫忙做家事..." />
             </div>
             <button id="settings-new-task-btn" class="settings-btn" type="button">新增</button>
           </div>
         </div>
 
-        <h2>每日點數規則</h2>
+        <h2>Bonus 任務管理 (完成直接+1)</h2>
+        <div class="card settings-group">
+          <div id="settings-bonus-task-list"></div>
+          <div class="settings-item">
+            <div style="width: 100%; padding-right: 10px;">
+              <div class="settings-label">新增 Bonus 任務</div>
+              <input id="settings-new-bonus-task-input" class="small-input" placeholder="例：彈鋼琴、背單字..." />
+            </div>
+            <button id="settings-new-bonus-task-btn" class="settings-btn" type="button">新增</button>
+          </div>
+        </div>
+
+        <h2>每日點數規則 (僅適用一般任務)</h2>
         <div class="card settings-group">
           <!-- Dynamic Rule List -->
           <div id="settings-rules-list"></div>
@@ -686,7 +714,7 @@
 
         <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v202511271820
+            v202511271920
         </div>
       </section>
     </main>
@@ -751,6 +779,7 @@
       <div class="modal">
         <h3>編輯任務</h3>
         <input type="hidden" id="edit-task-id" />
+        <input type="hidden" id="edit-task-type" /> <!-- 'normal' or 'bonus' -->
         <div class="form-group">
           <label>任務名稱</label>
           <input id="edit-task-name" class="small-input" />
@@ -804,7 +833,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511271820";
+    const APP_VERSION = "202511271920";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -849,11 +878,15 @@
     var defaultKidsState = {
       leo: {
         key: 'leo', displayName: 'Leo', avatar: 'L', slogan: '今天一起加油 💪', theme: 'boy',
-        totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
+        totalPoints: 0, dataByWeek: {}, history: [], 
+        tasks: JSON.parse(JSON.stringify(defaultCommonTasks)),
+        bonusTasks: [] // New: Bonus tasks container
       },
       natasha: {
         key: 'natasha', displayName: 'Natasha', avatar: 'N', slogan: '一起開心玩耍 🌈', theme: 'girl',
-        totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
+        totalPoints: 0, dataByWeek: {}, history: [], 
+        tasks: JSON.parse(JSON.stringify(defaultCommonTasks)),
+        bonusTasks: [] // New: Bonus tasks container
       }
     };
     var kidsState = JSON.parse(JSON.stringify(defaultKidsState));
@@ -883,7 +916,7 @@
                 }
             }
         } catch (e) {
-            console.log("Update check failed (offline?)", e);
+            // console.log("Update check failed"); // Silenced to avoid confusion in preview
         }
     }
 
@@ -1268,25 +1301,61 @@
         }
     }
 
-    function computeRuleScoreForDay(dayStatus) {
-        var checkedCount = 0;
-        Object.values(dayStatus || {}).forEach(status => {
-            if (status === 'checked') checkedCount++;
+    function calculateDailyScoreDetail(kid, weekKey, dayIndex) {
+        // New combined calculation function
+        var weekData = getWeekData(kid, weekKey);
+        if (!weekData.ruleScores) weekData.ruleScores = [0,0,0,0,0,0,0]; // For caching visual
+        
+        var dayStatus = weekData.status[dayIndex] || {};
+        
+        // 1. Calculate Rule Score (Normal Tasks)
+        var checkedNormalCount = 0;
+        
+        // Let's iterate kid.tasks (source of truth for normal tasks)
+        kid.tasks.forEach(t => {
+            if (dayStatus[t.id] === 'checked') checkedNormalCount++;
         });
         
-        var score = 0;
+        var ruleScore = 0;
         var maxPoints = 0;
         var matched = false;
         rulesState.forEach(function(rule) {
-            if (checkedCount >= rule.threshold) {
+            if (checkedNormalCount >= rule.threshold) {
                 if (rule.points > maxPoints) {
                     maxPoints = rule.points;
                     matched = true;
                 }
             }
         });
-        if (matched) score = maxPoints;
-        return score;
+        if (matched) ruleScore = maxPoints;
+
+        // 2. Calculate Bonus Score (Bonus Tasks)
+        var bonusScore = 0;
+        if (kid.bonusTasks) {
+            kid.bonusTasks.forEach(bt => {
+                if (dayStatus[bt.id] === 'checked') bonusScore++; // Each bonus task = +1
+            });
+        }
+
+        var manualPoints = weekData.summary[dayIndex] || 0;
+        
+        return {
+            ruleScore: ruleScore,
+            bonusScore: bonusScore,
+            manualPoints: manualPoints,
+            total: ruleScore + bonusScore + manualPoints
+        };
+    }
+
+    function calculateDailyTotal(kid, weekKey, dayIndex) {
+      return calculateDailyScoreDetail(kid, weekKey, dayIndex).total;
+    }
+
+    // Keep this for visual consistency in rendering (though calculateDailyScoreDetail does the real work now)
+    function computeRuleScoreForDay(dayStatus) {
+        // This old function is less useful now, logic moved to calculateDailyScoreDetail
+        // Kept just in case, but essentially deprecated by new logic
+        return 0; 
     }
 
     function performReset() {
@@ -1299,7 +1368,7 @@
     }
     
     function handleTestDataGen() {
-        if(!confirm('這將會為目前的小孩「隨機產生前兩週的任務數據」，方便測試週次切換。確定嗎？')) return;
+        if(!confirm('這將會為目前的小孩「隨機產生前兩週的任務紀錄(含Bonus)」。確定嗎？')) return;
         
         var kid = kidsState[currentKid];
         var today = new Date();
@@ -1324,25 +1393,34 @@
             if(!weekData.ruleScores) weekData.ruleScores = [0,0,0,0,0,0,0];
             
             for(var day=0; day<7; day++) {
-                var oldScore = weekData.ruleScores[day];
-                // Loop through ALL tasks, including deleted ones
-                // This ensures soft-deleted tasks get history populated for verification
+                var oldScore = weekData.ruleScores[day]; // This is actually cached total score, reusing field
+                
+                // Normal Tasks
                 kid.tasks.forEach(task => {
                     if(Math.random() > 0.4) { 
                         if(!weekData.status[day]) weekData.status[day] = {};
                         weekData.status[day][task.id] = 'checked';
                     }
                 });
-                var newScore = computeRuleScoreForDay(weekData.status[day]);
-                weekData.ruleScores[day] = newScore;
-                addedPoints += (newScore - oldScore);
+                // Bonus Tasks
+                if(kid.bonusTasks) {
+                    kid.bonusTasks.forEach(task => {
+                        if(Math.random() > 0.7) { // Lower chance for bonus
+                            if(!weekData.status[day]) weekData.status[day] = {};
+                            weekData.status[day][task.id] = 'checked';
+                        }
+                    });
+                }
+
+                // Recalculate
+                var details = calculateDailyScoreDetail(kid, key, day);
+                weekData.ruleScores[day] = details.total; // We store total here for simple caching
             }
         }
         
-        kid.totalPoints += addedPoints;
         saveData('kid', currentKid);
         renderAll();
-        showToast('已生成測試資料 (含已刪除任務的歷史紀錄)');
+        showToast('已生成測試資料');
     }
     
     function renderAll() {
@@ -1350,6 +1428,7 @@
         renderWeekTable();
         renderHistoryList();
         renderSettingsTaskList();
+        renderSettingsBonusTaskList(); // New
         renderSettingsKidList();
         renderSettingsRulesList(); 
     }
@@ -1381,6 +1460,11 @@
     var settingsNewTaskBtn = document.getElementById('settings-new-task-btn');
     var settingsKidListEl = document.getElementById('settings-kid-list');
     
+    // New Settings Elements for Bonus
+    var settingsBonusTaskListEl = document.getElementById('settings-bonus-task-list');
+    var settingsNewBonusTaskInput = document.getElementById('settings-new-bonus-task-input');
+    var settingsNewBonusTaskBtn = document.getElementById('settings-new-bonus-task-btn');
+
     var settingsRulesListEl = document.getElementById('settings-rules-list');
     var ruleThresholdInput = document.getElementById('rule-threshold-input');
     var rulePointsInput = document.getElementById('rule-points-input');
@@ -1397,9 +1481,10 @@
     var weekSelectModal = document.getElementById('week-select-modal');
     var weekListContainer = document.getElementById('week-list-container');
 
-    // New vars for Task Edit Modal
+    // Vars for Task Edit Modal
     var editTaskModal = document.getElementById('edit-task-modal');
     var editTaskIdInput = document.getElementById('edit-task-id');
+    var editTaskTypeInput = document.getElementById('edit-task-type');
     var editTaskNameInput = document.getElementById('edit-task-name');
     var btnCancelTaskEdit = document.getElementById('btn-cancel-task-edit');
     var btnSaveTaskEdit = document.getElementById('btn-save-task-edit');
@@ -1431,14 +1516,6 @@
         return kid.dataByWeek[weekKey];
     }
 
-    function calculateDailyTotal(kid, weekKey, dayIndex) {
-      var weekData = getWeekData(kid, weekKey);
-      if (!weekData.ruleScores) weekData.ruleScores = [0,0,0,0,0,0,0];
-      var ruleScore = weekData.ruleScores[dayIndex] || 0;
-      var manualPoints = weekData.summary[dayIndex] || 0;
-      return ruleScore + manualPoints;
-    }
-
     function calculateWeeklyGridPoints(kid, weekKey) {
         let total = 0;
         for (let i = 0; i < 7; i++) {
@@ -1455,13 +1532,15 @@
         }
 
         var kid = kidsState[currentKid];
+        
+        // Ensure bonusTasks exists (migration safety)
+        if (!kid.bonusTasks) kid.bonusTasks = [];
+
         kidNameEl.textContent = kid.displayName;
         if(currentFamilyId) {
              var idTag = document.createElement('span');
              idTag.className = 'family-id-tag';
              idTag.textContent = currentFamilyId;
-             // Append or update ID tag? simpler just to redraw name area carefully
-             // Let's just keep name clean and show ID in settings or bottom
         }
         
         var firstChild = avatarEl.firstChild;
@@ -1528,71 +1607,38 @@
         });
         table.appendChild(headerRow);
 
-        // --- Soft Delete Logic for Table ---
-        // Filter tasks: Show if NOT deleted OR (Is deleted BUT has data in this week)
-        var tasksToShow = kid.tasks.filter(function(t) {
-            // 1. If active, always show
-            if (!t.deleted) return true;
-            
-            // 2. If deleted, check if there is any data in this specific week
-            // weekData.status is array of 7 objects (days)
-            var hasDataInWeek = weekData.status.some(function(dayStatus) {
-                // Check if this task ID exists in the day's status object
-                return dayStatus && (dayStatus[t.id] === 'checked' || dayStatus[t.id] === 'crossed');
-            });
-            
-            return hasDataInWeek;
-        });
-
-        tasksToShow.forEach(function(task) {
-            var row = document.createElement('div');
-            row.className = 'task-row';
-
-            var nameCell = document.createElement('div');
-            nameCell.className = 'task-name';
-            // Mark deleted tasks visually in history
-            if (task.deleted) {
-                nameCell.textContent = task.name + " (已封存)";
-                nameCell.style.color = "#999";
-                nameCell.style.fontStyle = "italic";
-            } else {
-                nameCell.textContent = task.name;
-                var pressTimer;
-                nameCell.addEventListener('touchstart', function(){
-                    pressTimer = setTimeout(function(){
-                        if(confirm('要刪除任務「'+task.name+'」嗎？(歷史紀錄會保留，但列表中會隱藏)')) {
-                            deleteTask(task.id);
-                        }
-                    }, 800);
+        // --- Helper to filter tasks ---
+        function getVisibleTasks(taskList) {
+            return taskList.filter(function(t) {
+                if (!t.deleted) return true;
+                var hasDataInWeek = weekData.status.some(function(dayStatus) {
+                    return dayStatus && (dayStatus[t.id] === 'checked' || dayStatus[t.id] === 'crossed');
                 });
-                nameCell.addEventListener('touchend', function(){ clearTimeout(pressTimer); });
-            }
-            row.appendChild(nameCell);
+                return hasDataInWeek;
+            });
+        }
 
-            for (var i=0; i<7; i++) {
-                var cellWrapper = document.createElement('div');
-                cellWrapper.className = 'day-cell-wrapper';
-                if (isCurrentWeek && i === todayIdx) cellWrapper.classList.add('today-col');
-
-                var check = document.createElement('div');
-                var status = (weekData.status[i] && weekData.status[i][task.id]) ? weekData.status[i][task.id] : '';
-                check.className = 'custom-check ' + (status === 'checked' ? 'checked' : (status === 'crossed' ? 'crossed' : ''));
-                check.textContent = status === 'checked' ? '✔' : (status === 'crossed' ? '✖' : '');
-                
-                // If task is deleted, disable interaction to prevent resurrecting it by accident?
-                // Or allow editing history? Let's allow editing for now but visual cue is distinct.
-                (function(dIndex, taskId) {
-                    check.onclick = function() {
-                        toggleCheck(dIndex, taskId);
-                    };
-                })(i, task.id);
-
-                cellWrapper.appendChild(check);
-                row.appendChild(cellWrapper);
-            }
-            table.appendChild(row);
+        // 1. Normal Tasks
+        var normalTasks = getVisibleTasks(kid.tasks);
+        normalTasks.forEach(function(task) {
+            renderTaskRow(task, 'normal', weekData, todayIdx);
         });
 
+        // 2. Separator if needed
+        var bonusTasks = getVisibleTasks(kid.bonusTasks || []);
+        if (bonusTasks.length > 0) {
+            var sep = document.createElement('div');
+            sep.className = 'bonus-separator';
+            sep.textContent = '⭐ BONUS 任務區 ⭐';
+            table.appendChild(sep);
+        }
+
+        // 3. Bonus Tasks
+        bonusTasks.forEach(function(task) {
+            renderTaskRow(task, 'bonus', weekData, todayIdx);
+        });
+
+        // --- Footer Row (Summary) ---
         var sumRow = document.createElement('div');
         sumRow.className = 'day-summary-row';
         var sumTitle = document.createElement('div');
@@ -1615,23 +1661,81 @@
         table.appendChild(sumRow);
     }
 
-    function toggleCheck(dayIndex, taskId) {
+    function renderTaskRow(task, type, weekData, todayIdx) {
+        var table = document.getElementById('week-table');
+        var row = document.createElement('div');
+        row.className = 'task-row ' + (type === 'bonus' ? 'bonus-row' : '');
+
+        var nameCell = document.createElement('div');
+        nameCell.className = 'task-name';
+        if (task.deleted) {
+            nameCell.textContent = task.name + " (已封存)";
+            nameCell.style.color = "#999";
+            nameCell.style.fontStyle = "italic";
+        } else {
+            nameCell.textContent = task.name;
+            // Long press delete
+            var pressTimer;
+            nameCell.addEventListener('touchstart', function(){
+                pressTimer = setTimeout(function(){
+                    if(confirm(`要刪除任務「${task.name}」嗎？(歷史紀錄保留)`)) {
+                        deleteTask(task.id, type);
+                    }
+                }, 800);
+            });
+            nameCell.addEventListener('touchend', function(){ clearTimeout(pressTimer); });
+        }
+        row.appendChild(nameCell);
+
+        for (var i=0; i<7; i++) {
+            var cellWrapper = document.createElement('div');
+            cellWrapper.className = 'day-cell-wrapper';
+            if (currentViewWeekKey === getCurrentWeekKey() && i === todayIdx) cellWrapper.classList.add('today-col');
+
+            var check = document.createElement('div');
+            var status = (weekData.status[i] && weekData.status[i][task.id]) ? weekData.status[i][task.id] : '';
+            check.className = 'custom-check ' + (status === 'checked' ? 'checked' : (status === 'crossed' ? 'crossed' : ''));
+            check.textContent = status === 'checked' ? '✔' : (status === 'crossed' ? '✖' : '');
+            
+            (function(dIndex, taskId, tType) {
+                check.onclick = function() {
+                    toggleCheck(dIndex, taskId, tType);
+                };
+            })(i, task.id, type);
+
+            cellWrapper.appendChild(check);
+            row.appendChild(cellWrapper);
+        }
+        table.appendChild(row);
+    }
+
+    function toggleCheck(dayIndex, taskId, type) {
         var kid = kidsState[currentKid];
+        var detailsBefore = calculateDailyScoreDetail(kid, currentViewWeekKey, dayIndex);
+        var oldTotal = detailsBefore.total;
+
         var weekData = getWeekData(kid, currentViewWeekKey);
-        var oldRuleScore = weekData.ruleScores[dayIndex] || 0;
+        
         var current = (weekData.status[dayIndex] && weekData.status[dayIndex][taskId]) ? weekData.status[dayIndex][taskId] : '';
         var next = '';
         if (current === '') next = 'checked';
-        else if (current === 'checked') next = 'crossed';
+        else if (current === 'checked') next = 'crossed'; // Or just empty for bonus? let's keep crossed for consistancy
         else next = '';
+
+        // For Bonus, maybe crossed isn't needed, just toggle on/off? 
+        // Let's stick to standard behavior for consistency first.
 
         if (!weekData.status[dayIndex]) weekData.status[dayIndex] = {};
         weekData.status[dayIndex][taskId] = next;
 
-        var newRuleScore = computeRuleScoreForDay(weekData.status[dayIndex]);
-        weekData.ruleScores[dayIndex] = newRuleScore;
+        // Recalculate
+        var detailsAfter = calculateDailyScoreDetail(kid, currentViewWeekKey, dayIndex);
+        var newTotal = detailsAfter.total;
+        
+        // Cache result for quick lookups (though we calculate dynamic now)
+        weekData.ruleScores[dayIndex] = newTotal;
 
-        var diff = newRuleScore - oldRuleScore;
+        var diff = newTotal - oldTotal;
 
         if (diff !== 0) {
             kid.totalPoints += diff;
@@ -1707,6 +1811,7 @@
         renderAll();
     });
 
+    // --- Inserted renderHistoryList (Missing in previous version) ---
     function renderHistoryList() {
         if (!kidsState[currentKid]) return;
         var kid = kidsState[currentKid];
@@ -1782,57 +1887,64 @@
         renderAll();
         showToast('紀錄已刪除');
     }
+    // -------------------------------------------------------------
 
     function renderSettingsTaskList() {
+        renderGenericTaskList(settingsTaskListEl, 'normal');
+    }
+
+    function renderSettingsBonusTaskList() {
+        renderGenericTaskList(settingsBonusTaskListEl, 'bonus');
+    }
+
+    function renderGenericTaskList(container, type) {
         if (!kidsState[currentKid]) return;
         var kid = kidsState[currentKid];
-        settingsTaskListEl.innerHTML = '';
-        kid.tasks.forEach(function(t) {
-            // Only show ACTIVE (not deleted) tasks in settings
+        var list = (type === 'normal') ? kid.tasks : (kid.bonusTasks || []);
+        
+        container.innerHTML = '';
+        list.forEach(function(t) {
             if (t.deleted) return;
 
             var item = document.createElement('div');
             item.className = 'settings-item';
             
-            // Name
             var nameDiv = document.createElement('div');
             nameDiv.textContent = t.name;
+            if(type === 'bonus') nameDiv.style.color = '#e65100'; // Orange for bonus
             item.appendChild(nameDiv);
 
-            // Buttons Container
             var btnDiv = document.createElement('div');
             btnDiv.style.display = 'flex';
             btnDiv.style.gap = '8px';
 
-            // Edit Button
             var editBtn = document.createElement('button');
             editBtn.className = 'settings-btn';
             editBtn.textContent = '編輯';
             editBtn.onclick = function() {
-                openEditTaskModal(t.id, t.name);
+                openEditTaskModal(t.id, t.name, type);
             };
             btnDiv.appendChild(editBtn);
 
-            // Delete Button
             var delBtn = document.createElement('button');
             delBtn.className = 'settings-btn delete-task-btn';
             delBtn.textContent = '刪除';
             delBtn.onclick = function() {
-                if(confirm('確定刪除「'+t.name+'」？(歷史紀錄將被保留，但此任務將被封存)')) {
-                    deleteTask(t.id);
+                if(confirm('確定刪除「'+t.name+'」？(歷史紀錄保留)')) {
+                    deleteTask(t.id, type);
                 }
             };
             btnDiv.appendChild(delBtn);
 
             item.appendChild(btnDiv);
-            settingsTaskListEl.appendChild(item);
+            container.appendChild(item);
         });
     }
 
-    function deleteTask(taskId) {
+    function deleteTask(taskId, type) {
         var kid = kidsState[currentKid];
-        // Soft Delete: Mark as deleted instead of filter out
-        var task = kid.tasks.find(t => t.id === taskId);
+        var list = (type === 'bonus') ? kid.bonusTasks : kid.tasks;
+        var task = list.find(t => t.id === taskId);
         if (task) {
             task.deleted = true;
             saveData('kid', currentKid);
@@ -1841,9 +1953,10 @@
         }
     }
 
-    function openEditTaskModal(id, name) {
+    function openEditTaskModal(id, name, type) {
         editTaskIdInput.value = id;
         editTaskNameInput.value = name;
+        editTaskTypeInput.value = type; // Store type
         editTaskModal.classList.add('open');
     }
 
@@ -1851,11 +1964,14 @@
     
     if(btnSaveTaskEdit) btnSaveTaskEdit.onclick = function() {
         var id = editTaskIdInput.value;
+        var type = editTaskTypeInput.value;
         var newName = editTaskNameInput.value.trim();
         if(!newName) return;
         
         var kid = kidsState[currentKid];
-        var task = kid.tasks.find(t => t.id === id);
+        var list = (type === 'bonus') ? kid.bonusTasks : kid.tasks;
+        var task = list.find(t => t.id === id);
+        
         if(task) {
             task.name = newName;
             saveData('kid', currentKid);
@@ -1875,6 +1991,20 @@
         renderAll();
         showToast('任務已新增');
     });
+
+    if(settingsNewBonusTaskBtn) {
+        settingsNewBonusTaskBtn.addEventListener('click', function() {
+            var val = settingsNewBonusTaskInput.value.trim();
+            if(!val) return;
+            var kid = kidsState[currentKid];
+            if(!kid.bonusTasks) kid.bonusTasks = [];
+            kid.bonusTasks.push({ id: 'b'+Date.now(), name: val, createdAt: new Date().toISOString() });
+            settingsNewBonusTaskInput.value = '';
+            saveData('kid', currentKid);
+            renderAll();
+            showToast('Bonus 任務已新增');
+        });
+    }
 
     function renderSettingsKidList() {
         settingsKidListEl.innerHTML = '';
@@ -1931,7 +2061,8 @@
             totalPoints: 0,
             dataByWeek: {},
             history: [],
-            tasks: JSON.parse(JSON.stringify(defaultCommonTasks))
+            tasks: JSON.parse(JSON.stringify(defaultCommonTasks)),
+            bonusTasks: []
         };
         saveData('kid', newKey);
         renderAll();
