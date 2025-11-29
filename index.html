@@ -2,17 +2,16 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v6.8 (總分顯示x10)</title>
+  <title>家用點數任務板 v6.9 (智慧標籤版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
-    /* 1. 設定滿版高度並禁止 Body 捲動 */
     html, body { 
         touch-action: manipulation; 
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; 
         background: #f5f5f7; 
-        overflow: hidden; /* 關鍵：禁止外層捲動 */
+        overflow: hidden; 
         height: 100%;
         width: 100%;
     }
@@ -24,39 +23,34 @@
 
     body { font-size: 18px; }
 
-    /* 2. App 容器設定 */
     .app {
       max-width: 480px;
-      height: 100%;        /* 佔滿高度 */
-      max-height: 100dvh;  /* 支援手機動態網址列高度 */
+      height: 100%;        
+      max-height: 100dvh;  
       margin: 0 auto;
       background: white;
-      /* 移除圓角和外距，讓它在手機上看起來更像原生 App，或者在桌機上維持置中 */
-      /* 如果希望桌機有邊框，可以保留 max-width，但在手機上滿版體驗較好 */
       position: relative; 
       display: flex;
       flex-direction: column;
       box-shadow: 0 0 20px rgba(0,0,0,0.1);
     }
     
-    /* 桌機版稍作修飾 (大螢幕時才顯示圓角) */
     @media (min-width: 500px) {
         .app {
             height: 90vh;
             margin: 5vh auto;
             border-radius: 24px;
-            overflow: hidden; /* 確保圓角內內容不溢出 */
+            overflow: hidden; 
         }
     }
 
     .app.boy header { background: linear-gradient(135deg,#4f8cf7,#7ab8ff); }
     .app.girl header { background: linear-gradient(135deg,#ff7eb3,#ff9a9e); }
 
-    /* 3. Header 固定 (Flex item 不縮放) */
     header {
       color: white;
       padding: 18px 18px 14px;
-      flex-shrink: 0; /* 關鍵：不會因為內容多而被擠壓 */
+      flex-shrink: 0;
       z-index: 50;
     }
     .header-top { display:flex; justify-content:space-between; align-items:center; }
@@ -76,7 +70,6 @@
       position: relative; 
     }
 
-    /* 連線狀態燈號 */
     .connection-dot {
         position: absolute;
         bottom: 0;
@@ -170,12 +163,11 @@
         font-weight: 500;
     }
 
-    /* 4. Main 內容區設定為可捲動 */
     main {
-      padding: 10px 16px 20px; /* 增加底部 padding 避免內容貼底 */
-      flex: 1; /* 佔滿剩餘空間 */
-      overflow-y: auto; /* 關鍵：只有這裡可以捲動 */
-      -webkit-overflow-scrolling: touch; /* 讓 iOS 捲動更滑順 */
+      padding: 10px 16px 20px; 
+      flex: 1; 
+      overflow-y: auto; 
+      -webkit-overflow-scrolling: touch; 
       scroll-behavior: smooth;
     }
 
@@ -192,7 +184,6 @@
       overflow-x:auto;
       padding-bottom: 6px;
       position: relative;
-      /* 移除上次的高度限制，因為現在是整個 main 在捲動 */
     }
     .week-table {
       min-width: 640px; 
@@ -208,7 +199,6 @@
       font-size: 14px;
     }
     
-    /* 這裡維持 Sticky，讓表格標題在 Main 捲動時也黏在 Main 的頂部 */
     .week-header { 
         font-weight:700; 
         padding-bottom:8px;
@@ -312,8 +302,6 @@
 
     .task-row { margin-bottom:6px; }
     
-    /* 下方小計列也黏在底部 (相對於表格) */
-    /* 備註：因為現在 main 可以捲動，如果表格很長，這個會黏在表格視窗底部 */
     .day-summary-row {
       margin-top: 0;
       padding-top: 8px;
@@ -388,17 +376,38 @@
       font-size: 15px;
     }
 
+    /* 智慧標籤樣式 */
+    .chip-container {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+    }
+    .chip-btn {
+        background: #f0f0f5;
+        border: 1px solid #e0e0e0;
+        border-radius: 16px;
+        padding: 4px 12px;
+        font-size: 13px;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .chip-btn:active {
+        background: #e0e0e5;
+        transform: scale(0.95);
+    }
+
     .tab-page { display:none; }
     .tab-page.active { display:block; }
     
-    /* 5. Nav 固定在底部 (Flex item 不縮放) */
     nav {
       display:flex;
       justify-content:space-around;
       border-top:1px solid #ddd;
       background:#fff;
       padding-bottom: env(safe-area-inset-bottom);
-      flex-shrink: 0; /* 關鍵：固定 */
+      flex-shrink: 0;
       z-index: 50;
     }
     .nav-item {
@@ -527,7 +536,6 @@
     
     .empty-state { text-align: center; color: #999; padding: 20px; font-size: 14px; }
     
-    /* Version info styling */
     .version-info {
         text-align: center;
         font-size: 12px;
@@ -536,7 +544,6 @@
         font-family: monospace;
     }
     
-    /* Family Login Modal Styles */
     .login-modal-content {
         text-align: center;
         padding-top: 10px;
@@ -607,7 +614,6 @@
         <div class="kid-main">
           <div class="avatar">
             L
-            <!-- 連線狀態指示燈 -->
             <div id="db-status" class="connection-dot" title="連線中..."></div>
           </div>
           <div class="kid-info-block">
@@ -627,7 +633,6 @@
               <span>⭐</span>
               <span>0 點</span>
             </div>
-            <!-- 新增：本週點數 -->
             <div class="weekly-points" id="weekly-points">
                 本週：0 點
             </div>
@@ -650,17 +655,27 @@
             <button class="pill-btn pill-minus" type="button" onclick="handleQuickAdd(-1)">-1 點</button>
           </div>
           <div class="small-label">備註（選填，記錄原因）</div>
-          <input class="small-input" id="quick-note-input" placeholder="例：今天主動幫忙收玩具 +1 點" />
+          
+          <!-- Smart Input Area -->
+          <input class="small-input" id="quick-note-input" list="quick-note-list" placeholder="例：今天主動幫忙收玩具 +1 點" />
+          <datalist id="quick-note-list"></datalist>
+          <div id="quick-note-chips" class="chip-container"></div>
+          <!-- End Smart Input -->
+
         </div>
 
-        <!-- New Bulk Action Section -->
         <h2>大量加 / 扣點</h2>
         <div class="card" id="bulk-points-card">
             <div class="small-label">輸入點數</div>
             <input id="bulk-points-input" type="number" inputmode="numeric" pattern="[0-9]*" class="small-input" placeholder="輸入數字，例如 10, 50..." />
             
             <div class="small-label">備註（選填）</div>
-            <input id="bulk-note-input" class="small-input" placeholder="原因，例如：期末考滿分" />
+            
+            <!-- Smart Input Area -->
+            <input id="bulk-note-input" class="small-input" list="bulk-note-list" placeholder="原因，例如：期末考滿分" />
+            <datalist id="bulk-note-list"></datalist>
+            <div id="bulk-note-chips" class="chip-container"></div>
+            <!-- End Smart Input -->
 
             <div class="quick-row" style="margin-top:10px;">
                  <button class="pill-btn pill-plus" type="button" onclick="handleBulkAction(1)">大量加點 (+)</button>
@@ -796,8 +811,6 @@
             <input type="file" id="restore-file-input" accept=".json" style="display:none;" />
             <button onclick="document.getElementById('restore-file-input').click()" class="settings-btn" type="button" style="color:#1565c0;border-color:#bbdefb;">還原</button>
           </div>
-
-          <!-- 已移除：測試資料產生按鈕 -->
           
           <div class="settings-item">
             <div>
@@ -816,9 +829,8 @@
           </div>
         </div>
 
-        <!-- Version ID Display -->
         <div class="version-info" id="version-display">
-            v6.8
+            v6.9
         </div>
       </section>
     </main>
@@ -843,14 +855,11 @@
       </div>
     </nav>
     
-    <!-- ... existing code (Modals and Login) ... -->
-    <!-- Update Notification Banner -->
     <div id="update-banner" onclick="window.location.reload(true)">
         🚀 發現新版本！點此更新
     </div>
 
-    <!-- ... Modals ... -->
-    <!-- 編輯小孩 Modal -->
+    <!-- Modals -->
     <div class="modal-overlay" id="edit-kid-modal">
       <div class="modal">
         <h3>編輯小孩資料</h3>
@@ -881,7 +890,6 @@
       </div>
     </div>
 
-    <!-- 編輯任務 Modal -->
     <div class="modal-overlay" id="edit-task-modal">
       <div class="modal">
         <h3>編輯任務</h3>
@@ -898,7 +906,6 @@
       </div>
     </div>
 
-    <!-- 週次選擇 Modal -->
     <div class="modal-overlay" id="week-select-modal">
         <div class="modal">
             <h3>選擇要查看的週次</h3>
@@ -909,7 +916,6 @@
         </div>
     </div>
     
-    <!-- 登入/設定 ID Modal -->
     <div class="modal-overlay" id="login-modal" style="z-index:99999;">
         <div class="modal" style="max-width:360px;">
             <div class="login-modal-content">
@@ -926,19 +932,17 @@
         </div>
     </div>
     
-    <!-- 特效元素 -->
     <div id="coin-effect" class="coin-effect">🪙</div>
     <div id="deduct-effect" class="deduct-effect">🔻</div>
 
   </div>
 
   <script type="module">
-    // ... imports ...
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511281545"; // New Version
+    const APP_VERSION = "202511281600"; 
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -958,12 +962,10 @@
     const versionEl = document.getElementById('version-display');
     const updateBanner = document.getElementById('update-banner');
     
-    // --- Global State ---
     var STORAGE_KEY = 'family_points_data_v11';
     var FAMILY_ID_KEY = 'family_points_id';
     
     var currentFamilyId = localStorage.getItem(FAMILY_ID_KEY) || null;
-    
     var backupSettings = { cycle: 7, lastBackup: 0, email: '' };
 
     // --- Sound Generators ---
@@ -1002,7 +1004,6 @@
 
         const wavBuffer = new ArrayBuffer(44 + frameCount * 2);
         const view = new DataView(wavBuffer);
-        // ... WAV header construction ...
         writeString(view, 0, 'RIFF');
         view.setUint32(4, 36 + frameCount * 2, true);
         writeString(view, 8, 'WAVE');
@@ -1087,7 +1088,6 @@
     var currentKid = 'leo';
     var currentViewWeekKey = getCurrentWeekKey();
 
-    // ... Update Checker, Backup Logic (Same as before) ...
     async function checkForUpdates() {
         try {
             const url = window.location.href.split('#')[0] + '?t=' + Date.now();
@@ -1106,8 +1106,7 @@
         } catch (e) {}
     }
 
-    // ... Backup UI Event Listeners ...
-    // (Collapsed for brevity as they are unchanged)
+    // Backup & Restore Logic
     var backupBtn = document.getElementById('backup-btn');
     var backupCycleInput = document.getElementById('backup-cycle-input');
     var backupEmailInput = document.getElementById('backup-email-input');
@@ -1227,7 +1226,7 @@
         });
     }
     
-    // ... Bulk Action ...
+    // Bulk Action Logic
     var bulkPointsInput = document.getElementById('bulk-points-input');
     var bulkNoteInput = document.getElementById('bulk-note-input');
 
@@ -1246,7 +1245,7 @@
         kid.totalPoints += delta;
         kid.history.push({
             id: Date.now().toString(),
-            date: formatDateKey(new Date()), // Local Date String
+            date: formatDateKey(new Date()), 
             item: multiplier > 0 ? '大量加點' : '大量扣點',
             delta: delta,
             note: note || (multiplier > 0 ? '表現優異' : '違規扣點')
@@ -1272,7 +1271,6 @@
         showToast(multiplier > 0 ? `已加 ${points} 點！` : `已扣 ${points} 點`);
     }
 
-    // ... Init Logic ...
     async function initApp() {
         checkForUpdates();
         document.addEventListener('visibilitychange', () => {
@@ -1307,7 +1305,6 @@
         }
     }
 
-    // Login UI
     const loginModal = document.getElementById('login-modal');
     const loginBtn = document.getElementById('login-btn');
     const loginInput = document.getElementById('login-family-id');
@@ -1408,7 +1405,6 @@
         }
     }
 
-    // ... UI Interaction ...
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
@@ -1455,17 +1451,14 @@
       });
     });
 
-    // --- Helper Functions ---
-    // 強制解析本地日期字串 (YYYY-MM-DD)，避免 UTC 轉換誤差
     function parseLocalYMD(dateStr) {
         if(!dateStr) return new Date();
         var p = dateStr.split('-').map(Number);
-        // p[0]=Year, p[1]=Month, p[2]=Day
         return new Date(p[0], p[1]-1, p[2]); 
     }
 
     function getMonday(d) {
-        d = new Date(d); // Copy
+        d = new Date(d); 
         var day = d.getDay();
         var diff = d.getDate() - day + (day == 0 ? -6 : 1);
         var monday = new Date(d.setDate(diff));
@@ -1482,7 +1475,6 @@
         return formatDateKey(getMonday(new Date()));
     }
     function getWeekRangeString(mondayStr) {
-        // Safe parsing for display
         var monday = parseLocalYMD(mondayStr);
         var sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
@@ -1559,6 +1551,75 @@
       }
     }
     
+    // --- New: Smart Chips Logic ---
+    function getFrequentNotes(kid, limit = 5) {
+        // Default examples if history is empty
+        const defaults = ["主動幫忙", "收玩具", "沒禮貌"];
+        if (!kid.history || kid.history.length === 0) return defaults;
+
+        const counts = {};
+        kid.history.forEach(item => {
+            if (item.note && item.note.trim() !== '') {
+                counts[item.note] = (counts[item.note] || 0) + 1;
+            }
+        });
+
+        // Convert to array and sort
+        const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+        
+        // Merge with defaults (defaults appear if not enough history)
+        const result = [...new Set([...sorted, ...defaults])].slice(0, limit);
+        return result;
+    }
+
+    function renderSmartChips() {
+        if (!kidsState[currentKid]) return;
+        var kid = kidsState[currentKid];
+        var notes = getFrequentNotes(kid);
+
+        // 1. Render Quick Add Chips
+        var quickContainer = document.getElementById('quick-note-chips');
+        var quickList = document.getElementById('quick-note-list');
+        renderChipsToContainer(notes, quickContainer, 'quick-note-input');
+        renderDatalist(notes, quickList);
+
+        // 2. Render Bulk Add Chips
+        var bulkContainer = document.getElementById('bulk-note-chips');
+        var bulkList = document.getElementById('bulk-note-list');
+        renderChipsToContainer(notes, bulkContainer, 'bulk-note-input');
+        renderDatalist(notes, bulkList);
+    }
+
+    function renderChipsToContainer(notes, container, inputId) {
+        if(!container) return;
+        container.innerHTML = '';
+        notes.forEach(note => {
+            var btn = document.createElement('div');
+            btn.className = 'chip-btn';
+            btn.textContent = note;
+            btn.onclick = function() {
+                var input = document.getElementById(inputId);
+                if(input) {
+                    input.value = note;
+                    // Optional: Visual feedback or focus
+                    input.focus();
+                }
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function renderDatalist(notes, datalist) {
+        if(!datalist) return;
+        datalist.innerHTML = '';
+        notes.forEach(note => {
+            var opt = document.createElement('option');
+            opt.value = note;
+            datalist.appendChild(opt);
+        });
+    }
+    // ------------------------------
+
     function renderAll() {
         renderCurrentKid();
         renderWeekTable();
@@ -1567,6 +1628,9 @@
         renderSettingsBonusTaskList(); 
         renderSettingsKidList();
         renderSettingsRulesList(); 
+        
+        // Call Chip Render
+        renderSmartChips();
     }
 
     var appEl = document.querySelector('.app');
@@ -1667,10 +1731,8 @@
         appEl.classList.remove('boy', 'girl');
         appEl.classList.add(kid.theme);
         
-        // MODIFICATION: Total Points Display x10
         totalPointsEl.innerHTML = '<span>⭐</span><span>' + (kid.totalPoints * 10) + ' 點</span>';
         
-        // MODIFICATION: Weekly Points Display x10
         const weeklyScore = calculateWeeklyGridPoints(kid, currentViewWeekKey);
         weeklyPointsEl.textContent = `本週：${weeklyScore * 10} 點`;
 
@@ -1687,7 +1749,6 @@
         }
         
         redeemKidNameEl.textContent = kid.displayName;
-        // MODIFICATION: Redeem Page Total Points Display x10
         redeemKidPointsEl.textContent = kid.totalPoints * 10;
         
         if(settingsTaskKidLabel) settingsTaskKidLabel.textContent = "(管理對象：" + kid.displayName + ")";
@@ -1712,7 +1773,6 @@
         corner.textContent = '任務 / 星期';
         headerRow.appendChild(corner);
 
-        // Safe Date Parsing for Header
         var mondayDate = parseLocalYMD(currentViewWeekKey);
 
         days.forEach(function(d, i) {
@@ -1968,7 +2028,6 @@
         var targetItem = kid.history.find(x => x.id === id);
         
         if (targetItem && targetItem.item === '快速加扣') {
-            // FIX: 使用 parseLocalYMD 確保日期正確，不受時區影響
             var itemDate = parseLocalYMD(targetItem.date);
             var itemWeekKey = formatDateKey(getMonday(itemDate));
             
