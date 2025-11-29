@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>家用點數任務板 v6.9 (智慧標籤版)</title>
+  <title>家用點數任務板 v6.10 (樂觀顯示+安全鎖)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -830,11 +830,12 @@
         </div>
 
         <div class="version-info" id="version-display">
-            v6.9
+            v6.10
         </div>
       </section>
     </main>
 
+    <!-- Modals & Nav & Effects (Same as before) -->
     <nav>
       <div class="nav-item active" data-tab-target="today">
         <span class="nav-icon">📅</span>
@@ -942,7 +943,7 @@
     import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-    const APP_VERSION = "202511281600"; 
+    const APP_VERSION = "202511281620"; 
 
     const firebaseConfig = {
       apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
@@ -957,6 +958,7 @@
     let unsubscribeKids = null;
     let unsubscribeRules = null;
     let unsubscribeBackup = null; 
+    let isDataSynced = false; // Lock flag
 
     const dbStatusEl = document.getElementById('db-status');
     const versionEl = document.getElementById('version-display');
@@ -968,56 +970,38 @@
     var currentFamilyId = localStorage.getItem(FAMILY_ID_KEY) || null;
     var backupSettings = { cycle: 7, lastBackup: 0, email: '' };
 
-    // --- Sound Generators ---
+    // ... Sound Generators (Same) ...
     function createBeepURL(type) {
         const sampleRate = 44100;
         let duration = 0.4; 
         if(type === 'coin') duration = 0.4;
         if(type === 'deduct') duration = 0.3;
-        
         const frameCount = sampleRate * duration;
         let buffer = new Float32Array(frameCount);
         let phase = 0;
-        
         for (let i = 0; i < frameCount; i++) {
             let t = i / sampleRate;
             let currentFreq = 440;
             let currentVol = 0.1;
-
             if(type === 'coin') {
-                if (t < 0.06) {
-                    currentFreq = 988;
-                    currentVol = 0.1; 
-                } else {
-                    currentFreq = 1319;
-                    let progress = (t - 0.06) / (duration - 0.06);
-                    currentVol = 0.1 * (1 - progress); 
-                }
+                if (t < 0.06) { currentFreq = 988; currentVol = 0.1; } 
+                else { currentFreq = 1319; let progress = (t - 0.06) / (duration - 0.06); currentVol = 0.1 * (1 - progress); }
             } else if(type === 'deduct') {
                 currentFreq = 200 * (1 - (i/frameCount));
                 currentVol = 0.1 * (1 - (i/frameCount));
             }
-
             phase += (currentFreq * 2 * Math.PI) / sampleRate;
             buffer[i] = (Math.sin(phase) > 0 ? 1 : -1) * currentVol; 
         }
-
         const wavBuffer = new ArrayBuffer(44 + frameCount * 2);
         const view = new DataView(wavBuffer);
         writeString(view, 0, 'RIFF');
         view.setUint32(4, 36 + frameCount * 2, true);
         writeString(view, 8, 'WAVE');
         writeString(view, 12, 'fmt ');
-        view.setUint32(16, 16, true); 
-        view.setUint16(20, 1, true); 
-        view.setUint16(22, 1, true); 
-        view.setUint32(24, sampleRate, true);
-        view.setUint32(28, sampleRate * 2, true);
-        view.setUint16(32, 2, true); 
-        view.setUint16(34, 16, true); 
-        writeString(view, 36, 'data');
-        view.setUint32(40, frameCount * 2, true);
-
+        view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); 
+        writeString(view, 36, 'data'); view.setUint32(40, frameCount * 2, true);
         let offset = 44;
         for (let i = 0; i < frameCount; i++) {
             let s = Math.max(-1, Math.min(1, buffer[i]));
@@ -1025,26 +1009,16 @@
             view.setInt16(offset, s, true);
             offset += 2;
         }
-
         const blob = new Blob([view], { type: 'audio/wav' });
         return URL.createObjectURL(blob);
     }
-
     function writeString(view, offset, string) {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
+        for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
     }
-
     const coinSoundUrl = createBeepURL('coin');
     const deductSoundUrl = createBeepURL('deduct');
-
-    function playCoinSound() {
-        new Audio(coinSoundUrl).play().catch(e => console.log("Audio play prevented"));
-    }
-    function playDeductSound() {
-        new Audio(deductSoundUrl).play().catch(e => console.log("Audio play prevented"));
-    }
+    function playCoinSound() { new Audio(coinSoundUrl).play().catch(e => console.log("Audio play prevented")); }
+    function playDeductSound() { new Audio(deductSoundUrl).play().catch(e => console.log("Audio play prevented")); }
     function showCoinAnimation() {
         var coin = document.getElementById('coin-effect');
         if(coin) { coin.classList.remove('animate'); void coin.offsetWidth; coin.classList.add('animate'); }
@@ -1071,23 +1045,14 @@
     ];
 
     var defaultKidsState = {
-      leo: {
-        key: 'leo', displayName: 'Leo', avatar: 'L', slogan: '今天一起加油 💪', theme: 'boy',
-        totalPoints: 0, dataByWeek: {}, history: [], 
-        tasks: JSON.parse(JSON.stringify(defaultCommonTasks)),
-        bonusTasks: [] 
-      },
-      natasha: {
-        key: 'natasha', displayName: 'Natasha', avatar: 'N', slogan: '一起開心玩耍 🌈', theme: 'girl',
-        totalPoints: 0, dataByWeek: {}, history: [], 
-        tasks: JSON.parse(JSON.stringify(defaultCommonTasks)),
-        bonusTasks: [] 
-      }
+      leo: { key: 'leo', displayName: 'Leo', avatar: 'L', slogan: '今天一起加油 💪', theme: 'boy', totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks)), bonusTasks: [] },
+      natasha: { key: 'natasha', displayName: 'Natasha', avatar: 'N', slogan: '一起開心玩耍 🌈', theme: 'girl', totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks)), bonusTasks: [] }
     };
     var kidsState = JSON.parse(JSON.stringify(defaultKidsState));
     var currentKid = 'leo';
     var currentViewWeekKey = getCurrentWeekKey();
 
+    // ... Update Check, Backup ...
     async function checkForUpdates() {
         try {
             const url = window.location.href.split('#')[0] + '?t=' + Date.now();
@@ -1106,7 +1071,6 @@
         } catch (e) {}
     }
 
-    // Backup & Restore Logic
     var backupBtn = document.getElementById('backup-btn');
     var backupCycleInput = document.getElementById('backup-cycle-input');
     var backupEmailInput = document.getElementById('backup-email-input');
@@ -1116,12 +1080,8 @@
     var settingsNotification = document.getElementById('settings-notification');
 
     function updateBackupUI() {
-        if (backupCycleInput && document.activeElement !== backupCycleInput) {
-            backupCycleInput.value = backupSettings.cycle;
-        }
-        if (backupEmailInput && document.activeElement !== backupEmailInput) {
-            backupEmailInput.value = backupSettings.email || '';
-        }
+        if (backupCycleInput && document.activeElement !== backupCycleInput) backupCycleInput.value = backupSettings.cycle;
+        if (backupEmailInput && document.activeElement !== backupEmailInput) backupEmailInput.value = backupSettings.email || '';
         if (backupSettings.lastBackup > 0) {
             var d = new Date(backupSettings.lastBackup);
             lastBackupDateEl.textContent = d.toLocaleDateString() + " " + d.toLocaleTimeString();
@@ -1141,12 +1101,14 @@
 
     function saveBackupSettingsToCloud() {
         if (!currentFamilyId) return;
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         setDoc(doc(db, 'families', currentFamilyId, 'settings', 'backup'), backupSettings)
             .catch(err => console.error("Backup settings sync failed", err));
     }
     
     if(backupCycleInput) {
         backupCycleInput.addEventListener('change', function() {
+            if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); this.value = backupSettings.cycle; return; }
             backupSettings.cycle = parseInt(this.value) || 7;
             saveBackupSettingsToCloud();
             updateBackupUI();
@@ -1154,41 +1116,22 @@
     }
     if(backupEmailInput) {
         backupEmailInput.addEventListener('change', function() {
+            if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); this.value = backupSettings.email; return; }
             backupSettings.email = this.value.trim();
             saveBackupSettingsToCloud();
         });
     }
     if(backupBtn) {
         backupBtn.addEventListener('click', async function() {
-            var data = {
-                version: APP_VERSION,
-                exportDate: new Date().toISOString(),
-                familyId: currentFamilyId,
-                kids: kidsState,
-                rules: rulesState
-            };
+            if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
+            var data = { version: APP_VERSION, exportDate: new Date().toISOString(), familyId: currentFamilyId, kids: kidsState, rules: rulesState };
             var jsonStr = JSON.stringify(data, null, 2);
             var fileName = `family-points-backup-${formatDateKey(new Date())}.json`;
             var file = new File([jsonStr], fileName, {type: 'application/json'});
-
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({
-                        files: [file],
-                        title: '家庭點數備份',
-                        text: `這是您的家庭點數任務板備份檔。\n建議寄送至：${backupSettings.email || '(未設定 Email)'}`
-                    });
-                    finishBackup();
-                } catch (err) {}
+                try { await navigator.share({ files: [file], title: '家庭點數備份', text: `這是您的家庭點數任務板備份檔。\n建議寄送至：${backupSettings.email || '(未設定 Email)'}` }); finishBackup(); } catch (err) {}
             } else {
-                var a = document.createElement('a');
-                a.href = URL.createObjectURL(file);
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                showToast('備份檔已下載 (此裝置不支援直接分享)');
-                finishBackup();
+                var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast('備份檔已下載'); finishBackup();
             }
         });
     }
@@ -1196,11 +1139,12 @@
         backupSettings.lastBackup = Date.now();
         saveBackupSettingsToCloud();
         updateBackupUI();
-        showToast('備份紀錄已更新 (雲端同步)');
+        showToast('備份紀錄已更新');
     }
 
     if(restoreFileInput) {
         restoreFileInput.addEventListener('change', function(e) {
+            if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); this.value = ''; return; }
             var file = e.target.files[0];
             if(!file) return;
             var reader = new FileReader();
@@ -1211,9 +1155,7 @@
                     if(confirm(`確定要還原備份嗎？`)) {
                         kidsState = data.kids;
                         rulesState = data.rules;
-                        const uploadPromises = Object.values(kidsState).map(kid => {
-                            return setDoc(doc(db, 'families', currentFamilyId, 'kids', kid.key), kid);
-                        });
+                        const uploadPromises = Object.values(kidsState).map(kid => setDoc(doc(db, 'families', currentFamilyId, 'kids', kid.key), kid));
                         const rulesPromise = setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
                         await Promise.all([...uploadPromises, rulesPromise]);
                         alert("還原成功！");
@@ -1231,77 +1173,68 @@
     var bulkNoteInput = document.getElementById('bulk-note-input');
 
     function handleBulkAction(multiplier) {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var kid = kidsState[currentKid];
         var pointsStr = bulkPointsInput.value;
         var points = parseInt(pointsStr);
         var note = bulkNoteInput.value.trim();
 
-        if (!pointsStr || isNaN(points) || points <= 0) {
-            alert('請輸入有效的數字');
-            return;
-        }
+        if (!pointsStr || isNaN(points) || points <= 0) { alert('請輸入有效的數字'); return; }
 
         var delta = points * multiplier;
         kid.totalPoints += delta;
-        kid.history.push({
-            id: Date.now().toString(),
-            date: formatDateKey(new Date()), 
-            item: multiplier > 0 ? '大量加點' : '大量扣點',
-            delta: delta,
-            note: note || (multiplier > 0 ? '表現優異' : '違規扣點')
-        });
+        kid.history.push({ id: Date.now().toString(), date: formatDateKey(new Date()), item: multiplier > 0 ? '大量加點' : '大量扣點', delta: delta, note: note || (multiplier > 0 ? '表現優異' : '違規扣點') });
 
         var count = Math.min(points, 15); 
         var interval = 150; 
-        for (let i = 0; i < count; i++) {
-            setTimeout(() => {
-                if (multiplier > 0) playCoinSound();
-                else playDeductSound();
-            }, i * interval);
-        }
-        
-        if (multiplier > 0) showCoinAnimation();
-        else showDeductAnimation();
+        for (let i = 0; i < count; i++) { setTimeout(() => { if (multiplier > 0) playCoinSound(); else playDeductSound(); }, i * interval); }
+        if (multiplier > 0) showCoinAnimation(); else showDeductAnimation();
 
         bulkPointsInput.value = '';
         bulkNoteInput.value = '';
-
         saveData('kid', currentKid);
         renderAll();
         showToast(multiplier > 0 ? `已加 ${points} 點！` : `已扣 ${points} 點`);
     }
 
+    // --- INIT APP (Optimistic Load) ---
     async function initApp() {
         checkForUpdates();
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') checkForUpdates();
-        });
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdates(); });
 
         if (!currentFamilyId) {
             showLoginModal();
             return; 
         }
 
+        // 1. Optimistic Load First!
+        loadLocalDataOnly();
+        renderAll();
+        isDataSynced = false; // Lock UI
+        updateConnectionStatus('syncing');
+
+        // 2. Start Firebase Init
         try {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
-            try {
-                await enableIndexedDbPersistence(db);
-            } catch (err) {}
+            try { await enableIndexedDbPersistence(db); } catch (err) {}
 
             auth = getAuth(app);
             await signInAnonymously(auth);
             
-            updateConnectionStatus(navigator.onLine ? 'online' : 'offline');
-            window.addEventListener('online', () => updateConnectionStatus('online'));
+            updateConnectionStatus(navigator.onLine ? 'syncing' : 'offline');
+            window.addEventListener('online', () => updateConnectionStatus('syncing'));
             window.addEventListener('offline', () => updateConnectionStatus('offline'));
 
             await checkAndMigrateData();
             setupRealtimeListeners();
         } catch (e) {
             updateConnectionStatus('offline');
-            loadLocalDataOnly();
-            renderAll();
+            // Data is already loaded from local, so we just stay in offline mode.
+            // If completely failed, maybe unlock if we trust local? 
+            // For now, keep locked or rely on local fallback logic.
+            // Actually, if auth fails, we probably shouldn't unlock write actions.
+            console.error("Init failed", e);
         }
     }
 
@@ -1309,10 +1242,7 @@
     const loginBtn = document.getElementById('login-btn');
     const loginInput = document.getElementById('login-family-id');
 
-    function showLoginModal() {
-        loginModal.classList.add('open');
-        loginModal.onclick = null;
-    }
+    function showLoginModal() { loginModal.classList.add('open'); loginModal.onclick = null; }
 
     if(loginBtn) {
         loginBtn.addEventListener('click', function() {
@@ -1332,14 +1262,13 @@
             const kidsRef = collection(db, 'families', currentFamilyId, 'kids');
             const snapshot = await getDocs(kidsRef);
             if (snapshot.empty) {
-                updateConnectionStatus('syncing');
+                // If cloud is empty, we unlock and upload local data
                 loadLocalDataOnly(); 
-                const uploadPromises = Object.values(kidsState).map(kid => {
-                    return setDoc(doc(db, 'families', currentFamilyId, 'kids', kid.key), kid);
-                });
+                const uploadPromises = Object.values(kidsState).map(kid => setDoc(doc(db, 'families', currentFamilyId, 'kids', kid.key), kid));
                 const rulesPromise = setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
                 await Promise.all([...uploadPromises, rulesPromise]);
                 showToast("家庭資料初始化完成");
+                isDataSynced = true; // Unlock
                 updateConnectionStatus('online');
             }
         } catch (e) {}
@@ -1355,14 +1284,22 @@
             if(snapshot.empty && !Object.keys(kidsState).length) return;
             const newKidsState = {};
             snapshot.forEach(doc => { newKidsState[doc.id] = doc.data(); });
+            
+            // Merge logic
             kidsState = newKidsState;
             if (!kidsState[currentKid]) {
                 const keys = Object.keys(kidsState);
                 if(keys.length > 0) currentKid = keys[0];
                 else currentKid = null;
             }
+            
+            // Unlock & Cache
+            isDataSynced = true;
+            saveLocalCache(); 
+            
             renderAll();
             highlightTodayColumn();
+            updateConnectionStatus('online');
         }, (error) => updateConnectionStatus('offline'));
 
         unsubscribeRules = onSnapshot(doc(db, 'families', currentFamilyId, 'settings', 'rules'), (docSnap) => {
@@ -1370,6 +1307,7 @@
                 const data = docSnap.data();
                 if (data.list) {
                     rulesState = data.list;
+                    saveLocalCache();
                     renderAll();
                 }
             }
@@ -1394,6 +1332,11 @@
             } catch (e) {}
         }
     }
+    
+    // New helper to save cache
+    function saveLocalCache() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ kids: kidsState, rules: rulesState }));
+    }
 
     function updateConnectionStatus(status) {
         if(dbStatusEl) {
@@ -1405,12 +1348,11 @@
         }
     }
 
+    // UI Interaction Guards
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
-    document.addEventListener('touchmove', function(event) {
-        if (event.touches.length > 1) { event.preventDefault(); }
-    }, { passive: false });
+    document.addEventListener('touchmove', function(event) { if (event.touches.length > 1) { event.preventDefault(); } }, { passive: false });
 
     function showToast(msg) {
       var toast = document.getElementById('toast-msg');
@@ -1483,6 +1425,8 @@
 
     async function saveData(type, id) {
       if (!currentFamilyId) return;
+      // Guard is inside buttons, but extra check here doesn't hurt, though we want Toast.
+      // We rely on button guards for Toast feedback.
       triggerSaveIndicator();
       try {
         if (type === 'kid' && id) {
@@ -1551,43 +1495,23 @@
       }
     }
     
-    // --- New: Smart Chips Logic ---
     function getFrequentNotes(kid, limit = 5) {
-        // Default examples if history is empty
         const defaults = ["主動幫忙", "收玩具", "沒禮貌"];
         if (!kid.history || kid.history.length === 0) return defaults;
-
         const counts = {};
-        kid.history.forEach(item => {
-            if (item.note && item.note.trim() !== '') {
-                counts[item.note] = (counts[item.note] || 0) + 1;
-            }
-        });
-
-        // Convert to array and sort
+        kid.history.forEach(item => { if (item.note && item.note.trim() !== '') { counts[item.note] = (counts[item.note] || 0) + 1; } });
         const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-        
-        // Merge with defaults (defaults appear if not enough history)
-        const result = [...new Set([...sorted, ...defaults])].slice(0, limit);
-        return result;
+        return [...new Set([...sorted, ...defaults])].slice(0, limit);
     }
 
     function renderSmartChips() {
         if (!kidsState[currentKid]) return;
         var kid = kidsState[currentKid];
         var notes = getFrequentNotes(kid);
-
-        // 1. Render Quick Add Chips
-        var quickContainer = document.getElementById('quick-note-chips');
-        var quickList = document.getElementById('quick-note-list');
-        renderChipsToContainer(notes, quickContainer, 'quick-note-input');
-        renderDatalist(notes, quickList);
-
-        // 2. Render Bulk Add Chips
-        var bulkContainer = document.getElementById('bulk-note-chips');
-        var bulkList = document.getElementById('bulk-note-list');
-        renderChipsToContainer(notes, bulkContainer, 'bulk-note-input');
-        renderDatalist(notes, bulkList);
+        renderChipsToContainer(notes, document.getElementById('quick-note-chips'), 'quick-note-input');
+        renderDatalist(notes, document.getElementById('quick-note-list'));
+        renderChipsToContainer(notes, document.getElementById('bulk-note-chips'), 'bulk-note-input');
+        renderDatalist(notes, document.getElementById('bulk-note-list'));
     }
 
     function renderChipsToContainer(notes, container, inputId) {
@@ -1599,11 +1523,7 @@
             btn.textContent = note;
             btn.onclick = function() {
                 var input = document.getElementById(inputId);
-                if(input) {
-                    input.value = note;
-                    // Optional: Visual feedback or focus
-                    input.focus();
-                }
+                if(input) { input.value = note; input.focus(); }
             };
             container.appendChild(btn);
         });
@@ -1612,13 +1532,8 @@
     function renderDatalist(notes, datalist) {
         if(!datalist) return;
         datalist.innerHTML = '';
-        notes.forEach(note => {
-            var opt = document.createElement('option');
-            opt.value = note;
-            datalist.appendChild(opt);
-        });
+        notes.forEach(note => { var opt = document.createElement('option'); opt.value = note; datalist.appendChild(opt); });
     }
-    // ------------------------------
 
     function renderAll() {
         renderCurrentKid();
@@ -1628,8 +1543,6 @@
         renderSettingsBonusTaskList(); 
         renderSettingsKidList();
         renderSettingsRulesList(); 
-        
-        // Call Chip Render
         renderSmartChips();
     }
 
@@ -1876,6 +1789,7 @@
     }
 
     function toggleCheck(dayIndex, taskId, type) {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var kid = kidsState[currentKid];
         var detailsBefore = calculateDailyScoreDetail(kid, currentViewWeekKey, dayIndex);
         var oldTotal = detailsBefore.total;
@@ -1906,6 +1820,7 @@
     }
 
     function handleQuickAdd(val) {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var kid = kidsState[currentKid];
         var note = quickNoteInput.value.trim();
         
@@ -1934,6 +1849,7 @@
     }
 
     redeemConfirmBtn.addEventListener('click', function() {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var name = redeemNameInput.value.trim();
         var pts = parseInt(redeemPointsInput.value);
         var note = redeemNoteInput.value.trim();
@@ -2024,6 +1940,7 @@
     }
 
     function deleteHistoryItem(id, delta) {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var kid = kidsState[currentKid];
         var targetItem = kid.history.find(x => x.id === id);
         
@@ -2086,6 +2003,7 @@
     }
 
     function deleteTask(taskId, type) {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var kid = kidsState[currentKid];
         var list = (type === 'bonus') ? kid.bonusTasks : kid.tasks;
         var task = list.find(t => t.id === taskId);
@@ -2106,6 +2024,7 @@
 
     if(btnCancelTaskEdit) btnCancelTaskEdit.onclick = function() { editTaskModal.classList.remove('open'); };
     if(btnSaveTaskEdit) btnSaveTaskEdit.onclick = function() {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var id = editTaskIdInput.value;
         var type = editTaskTypeInput.value;
         var newName = editTaskNameInput.value.trim();
@@ -2123,6 +2042,7 @@
     };
 
     settingsNewTaskBtn.addEventListener('click', function() {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var val = settingsNewTaskInput.value.trim();
         if(!val) return;
         var kid = kidsState[currentKid];
@@ -2135,6 +2055,7 @@
 
     if(settingsNewBonusTaskBtn) {
         settingsNewBonusTaskBtn.addEventListener('click', function() {
+            if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
             var val = settingsNewBonusTaskInput.value.trim();
             if(!val) return;
             var kid = kidsState[currentKid];
@@ -2191,6 +2112,7 @@
     }
 
     function addNewKid() {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var newKey = 'kid_' + Date.now();
         kidsState[newKey] = {
             key: newKey,
@@ -2210,6 +2132,7 @@
     }
 
     function deleteKid(key) {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         delete kidsState[key];
         if (currentKid === key) {
             const keys = Object.keys(kidsState);
@@ -2232,6 +2155,7 @@
 
     btnCancelEdit.onclick = function() { editKidModal.classList.remove('open'); };
     btnSaveEdit.onclick = function() {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var key = editKidKeyInput.value;
         var kid = kidsState[key];
         if(!kid) return;
@@ -2262,6 +2186,7 @@
             delBtn.className = 'settings-btn delete-task-btn';
             delBtn.textContent = '刪除';
             delBtn.onclick = function() {
+                if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
                 rulesState.splice(idx, 1);
                 saveData('rules');
                 renderAll();
@@ -2272,6 +2197,7 @@
     }
 
     btnAddRule.addEventListener('click', function() {
+        if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var t = parseInt(ruleThresholdInput.value);
         var p = parseInt(rulePointsInput.value);
         if(isNaN(t) || isNaN(p)) return;
