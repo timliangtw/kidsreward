@@ -2,21 +2,21 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebas
 import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, getDoc, deleteDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
-const APP_VERSION = "202512051150"; 
+const APP_VERSION = "2025-12-16 23:25";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
-  authDomain: "familypoints-a51f1.firebaseapp.com",
-  projectId: "familypoints-a51f1",
-  storageBucket: "familypoints-a51f1.firebasestorage.app",
-  messagingSenderId: "1087519864570",
-  appId: "1:1087519864570:web:d64e17a153109664b23b43"
+    apiKey: "AIzaSyDY2SKqPdeB181tALUJE1jr9BtAHN3wUdw",
+    authDomain: "familypoints-a51f1.firebaseapp.com",
+    projectId: "familypoints-a51f1",
+    storageBucket: "familypoints-a51f1.firebasestorage.app",
+    messagingSenderId: "1087519864570",
+    appId: "1:1087519864570:web:d64e17a153109664b23b43"
 };
 
 let app, db, auth;
 let unsubscribeKids = null;
 let unsubscribeRules = null;
-let unsubscribeBackup = null; 
+let unsubscribeBackup = null;
 let isDataSynced = false; // Lock flag
 
 const dbStatusEl = document.getElementById('db-status');
@@ -32,9 +32,9 @@ var backupSettings = { cycle: 7, lastBackup: 0, email: '' };
 // ... Sound Generators (Same) ...
 function createBeepURL(type) {
     const sampleRate = 44100;
-    let duration = 0.4; 
-    if(type === 'coin') duration = 0.4;
-    if(type === 'deduct') duration = 0.3;
+    let duration = 0.4;
+    if (type === 'coin') duration = 0.4;
+    if (type === 'deduct') duration = 0.3;
     const frameCount = sampleRate * duration;
     let buffer = new Float32Array(frameCount);
     let phase = 0;
@@ -42,15 +42,15 @@ function createBeepURL(type) {
         let t = i / sampleRate;
         let currentFreq = 440;
         let currentVol = 0.1;
-        if(type === 'coin') {
-            if (t < 0.06) { currentFreq = 988; currentVol = 0.1; } 
+        if (type === 'coin') {
+            if (t < 0.06) { currentFreq = 988; currentVol = 0.1; }
             else { currentFreq = 1319; let progress = (t - 0.06) / (duration - 0.06); currentVol = 0.1 * (1 - progress); }
-        } else if(type === 'deduct') {
-            currentFreq = 200 * (1 - (i/frameCount));
-            currentVol = 0.1 * (1 - (i/frameCount));
+        } else if (type === 'deduct') {
+            currentFreq = 200 * (1 - (i / frameCount));
+            currentVol = 0.1 * (1 - (i / frameCount));
         }
         phase += (currentFreq * 2 * Math.PI) / sampleRate;
-        buffer[i] = (Math.sin(phase) > 0 ? 1 : -1) * currentVol; 
+        buffer[i] = (Math.sin(phase) > 0 ? 1 : -1) * currentVol;
     }
     const wavBuffer = new ArrayBuffer(44 + frameCount * 2);
     const view = new DataView(wavBuffer);
@@ -59,7 +59,7 @@ function createBeepURL(type) {
     writeString(view, 8, 'WAVE');
     writeString(view, 12, 'fmt ');
     view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); 
+    view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
     writeString(view, 36, 'data'); view.setUint32(40, frameCount * 2, true);
     let offset = 44;
     for (let i = 0; i < frameCount; i++) {
@@ -80,16 +80,16 @@ function playCoinSound() { new Audio(coinSoundUrl).play().catch(e => console.log
 function playDeductSound() { new Audio(deductSoundUrl).play().catch(e => console.log("Audio play prevented")); }
 function showCoinAnimation() {
     var coin = document.getElementById('coin-effect');
-    if(coin) { coin.classList.remove('animate'); void coin.offsetWidth; coin.classList.add('animate'); }
+    if (coin) { coin.classList.remove('animate'); void coin.offsetWidth; coin.classList.add('animate'); }
 }
 function showDeductAnimation() {
     var elem = document.getElementById('deduct-effect');
-    if(elem) { elem.classList.remove('animate'); void elem.offsetWidth; elem.classList.add('animate'); }
+    if (elem) { elem.classList.remove('animate'); void elem.offsetWidth; elem.classList.add('animate'); }
 }
 
-if(versionEl) {
-    let displayVer = "v" + APP_VERSION;
-    if(currentFamilyId) displayVer += " | ID: " + currentFamilyId;
+if (versionEl) {
+    let displayVer = "Ver: " + APP_VERSION;
+    if (currentFamilyId) displayVer += " | ID: " + currentFamilyId;
     displayVer += "<br>系統認定今天: " + formatDateKey(new Date());
     versionEl.innerHTML = displayVer;
 }
@@ -98,14 +98,14 @@ var defaultRules = [{ threshold: 3, points: 2 }, { threshold: 1, points: 1 }];
 var rulesState = JSON.parse(JSON.stringify(defaultRules)); // Legacy / Fallback rules
 
 var defaultCommonTasks = [
-  { id: 'dress', name: '自己穿好衣服' },
-  { id: 'hw',    name: '寫完回家作業' },
-  { id: 'toys',  name: '睡前收玩具' }
+    { id: 'dress', name: '自己穿好衣服' },
+    { id: 'hw', name: '寫完回家作業' },
+    { id: 'toys', name: '睡前收玩具' }
 ];
 
 var defaultKidsState = {
-  leo: { key: 'leo', displayName: 'Leo', avatar: 'L', slogan: '今天一起加油 💪', theme: 'boy', totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks)), bonusTasks: [], rules: JSON.parse(JSON.stringify(defaultRules)) },
-  natasha: { key: 'natasha', displayName: 'Natasha', avatar: 'N', slogan: '一起開心玩耍 🌈', theme: 'girl', totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks)), bonusTasks: [], rules: JSON.parse(JSON.stringify(defaultRules)) }
+    leo: { key: 'leo', displayName: 'Leo', avatar: 'L', slogan: '今天一起加油 💪', theme: 'boy', totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks)), bonusTasks: [], rules: JSON.parse(JSON.stringify(defaultRules)) },
+    natasha: { key: 'natasha', displayName: 'Natasha', avatar: 'N', slogan: '一起開心玩耍 🌈', theme: 'girl', totalPoints: 0, dataByWeek: {}, history: [], tasks: JSON.parse(JSON.stringify(defaultCommonTasks)), bonusTasks: [], rules: JSON.parse(JSON.stringify(defaultRules)) }
 };
 var kidsState = JSON.parse(JSON.stringify(defaultKidsState));
 var currentKid = 'leo';
@@ -117,17 +117,17 @@ async function checkForUpdates() {
         const url = window.location.href.split('#')[0] + '?t=' + Date.now();
         const response = await fetch(url, { cache: "no-store" });
         const text = await response.text();
-        const match = text.match(/const APP_VERSION = "(\d+)";/);
+        const match = text.match(/const APP_VERSION = "([^"]+)";/);
         if (match && match[1]) {
             const latestVersion = match[1];
             if (latestVersion !== APP_VERSION) {
-                if(updateBanner) {
-                    updateBanner.innerHTML = `🚀 發現新版本 (v${latestVersion.slice(-4)})！點此更新`;
+                if (updateBanner) {
+                    updateBanner.innerHTML = `🚀 發現新版本 (${latestVersion})！點此更新`;
                     updateBanner.style.display = 'block';
                 }
             }
         }
-    } catch (e) {}
+    } catch (e) { }
 }
 
 var backupBtn = document.getElementById('backup-btn');
@@ -150,11 +150,11 @@ function updateBackupUI() {
     var now = Date.now();
     var diffDays = (now - backupSettings.lastBackup) / (1000 * 60 * 60 * 24);
     if (backupSettings.lastBackup === 0 || diffDays > backupSettings.cycle) {
-        if(backupOverdueMsg) backupOverdueMsg.style.display = 'block';
-        if(settingsNotification) settingsNotification.classList.add('show');
+        if (backupOverdueMsg) backupOverdueMsg.style.display = 'block';
+        if (settingsNotification) settingsNotification.classList.add('show');
     } else {
-        if(backupOverdueMsg) backupOverdueMsg.style.display = 'none';
-        if(settingsNotification) settingsNotification.classList.remove('show');
+        if (backupOverdueMsg) backupOverdueMsg.style.display = 'none';
+        if (settingsNotification) settingsNotification.classList.remove('show');
     }
 }
 
@@ -165,30 +165,30 @@ function saveBackupSettingsToCloud() {
         .catch(err => console.error("Backup settings sync failed", err));
 }
 
-if(backupCycleInput) {
-    backupCycleInput.addEventListener('change', function() {
+if (backupCycleInput) {
+    backupCycleInput.addEventListener('change', function () {
         if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); this.value = backupSettings.cycle; return; }
         backupSettings.cycle = parseInt(this.value) || 7;
         saveBackupSettingsToCloud();
         updateBackupUI();
     });
 }
-if(backupEmailInput) {
-    backupEmailInput.addEventListener('change', function() {
+if (backupEmailInput) {
+    backupEmailInput.addEventListener('change', function () {
         if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); this.value = backupSettings.email; return; }
         backupSettings.email = this.value.trim();
         saveBackupSettingsToCloud();
     });
 }
-if(backupBtn) {
-    backupBtn.addEventListener('click', async function() {
+if (backupBtn) {
+    backupBtn.addEventListener('click', async function () {
         if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var data = { version: APP_VERSION, exportDate: new Date().toISOString(), familyId: currentFamilyId, kids: kidsState, rules: rulesState };
         var jsonStr = JSON.stringify(data, null, 2);
         var fileName = `family-points-backup-${formatDateKey(new Date())}.json`;
-        var file = new File([jsonStr], fileName, {type: 'application/json'});
+        var file = new File([jsonStr], fileName, { type: 'application/json' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ files: [file], title: '家庭點數備份', text: `這是您的家庭點數任務板備份檔。\n建議寄送至：${backupSettings.email || '(未設定 Email)'}` }); finishBackup(); } catch (err) {}
+            try { await navigator.share({ files: [file], title: '家庭點數備份', text: `這是您的家庭點數任務板備份檔。\n建議寄送至：${backupSettings.email || '(未設定 Email)'}` }); finishBackup(); } catch (err) { }
         } else {
             var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); showToast('備份檔已下載'); finishBackup();
         }
@@ -201,21 +201,21 @@ function finishBackup() {
     showToast('備份紀錄已更新');
 }
 
-if(restoreFileInput) {
-    restoreFileInput.addEventListener('change', function(e) {
+if (restoreFileInput) {
+    restoreFileInput.addEventListener('change', function (e) {
         if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); this.value = ''; return; }
         var file = e.target.files[0];
-        if(!file) return;
+        if (!file) return;
         var reader = new FileReader();
-        reader.onload = async function(e) {
+        reader.onload = async function (e) {
             try {
                 var data = JSON.parse(e.target.result);
-                if(!data.kids) throw new Error("格式錯誤");
-                if(confirm(`確定要還原備份嗎？`)) {
+                if (!data.kids) throw new Error("格式錯誤");
+                if (confirm(`確定要還原備份嗎？`)) {
                     kidsState = data.kids;
                     // rulesState fallback
-                    if(data.rules) rulesState = data.rules;
-                    
+                    if (data.rules) rulesState = data.rules;
+
                     const uploadPromises = Object.values(kidsState).map(kid => setDoc(doc(db, 'families', currentFamilyId, 'kids', kid.key), kid));
                     // No longer saving global rules to cloud actively, but we can restore it for legacy
                     const rulesPromise = setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
@@ -223,7 +223,7 @@ if(restoreFileInput) {
                     alert("還原成功！");
                     window.location.reload();
                 }
-            } catch(err) { alert("還原失敗"); }
+            } catch (err) { alert("還原失敗"); }
         };
         reader.readAsText(file);
         restoreFileInput.value = '';
@@ -247,8 +247,8 @@ function handleBulkAction(multiplier) {
     kid.totalPoints += delta;
     kid.history.push({ id: Date.now().toString(), date: formatDateKey(new Date()), item: multiplier > 0 ? '大量加點' : '大量扣點', delta: delta, note: note || (multiplier > 0 ? '表現優異' : '違規扣點') });
 
-    var count = Math.min(points, 15); 
-    var interval = 150; 
+    var count = Math.min(points, 15);
+    var interval = 150;
     for (let i = 0; i < count; i++) { setTimeout(() => { if (multiplier > 0) playCoinSound(); else playDeductSound(); }, i * interval); }
     if (multiplier > 0) showCoinAnimation(); else showDeductAnimation();
 
@@ -266,7 +266,7 @@ async function initApp() {
 
     if (!currentFamilyId) {
         showLoginModal();
-        return; 
+        return;
     }
 
     // 1. Optimistic Load First!
@@ -279,11 +279,11 @@ async function initApp() {
     try {
         app = initializeApp(firebaseConfig);
         db = getFirestore(app);
-        try { await enableIndexedDbPersistence(db); } catch (err) {}
+        try { await enableIndexedDbPersistence(db); } catch (err) { }
 
         auth = getAuth(app);
         await signInAnonymously(auth);
-        
+
         updateConnectionStatus(navigator.onLine ? 'syncing' : 'offline');
         window.addEventListener('online', () => updateConnectionStatus('syncing'));
         window.addEventListener('offline', () => updateConnectionStatus('offline'));
@@ -302,10 +302,10 @@ const loginInput = document.getElementById('login-family-id');
 
 function showLoginModal() { loginModal.classList.add('open'); loginModal.onclick = null; }
 
-if(loginBtn) {
-    loginBtn.addEventListener('click', function() {
+if (loginBtn) {
+    loginBtn.addEventListener('click', function () {
         const val = loginInput.value.trim();
-        if(val.length < 3) { alert("代號太短"); return; }
+        if (val.length < 3) { alert("代號太短"); return; }
         if (!/^[a-zA-Z0-9-]+$/.test(val)) { alert("格式錯誤"); return; }
         currentFamilyId = val;
         localStorage.setItem(FAMILY_ID_KEY, currentFamilyId);
@@ -321,7 +321,7 @@ async function checkAndMigrateData() {
         const snapshot = await getDocs(kidsRef);
         if (snapshot.empty) {
             // If cloud is empty, we unlock and upload local data
-            loadLocalDataOnly(); 
+            loadLocalDataOnly();
             const uploadPromises = Object.values(kidsState).map(kid => setDoc(doc(db, 'families', currentFamilyId, 'kids', kid.key), kid));
             const rulesPromise = setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
             await Promise.all([...uploadPromises, rulesPromise]);
@@ -329,7 +329,7 @@ async function checkAndMigrateData() {
             isDataSynced = true; // Unlock
             updateConnectionStatus('online');
         }
-    } catch (e) {}
+    } catch (e) { }
 }
 
 function setupRealtimeListeners() {
@@ -339,22 +339,22 @@ function setupRealtimeListeners() {
     if (unsubscribeBackup) { unsubscribeBackup(); unsubscribeBackup = null; }
 
     unsubscribeKids = onSnapshot(collection(db, 'families', currentFamilyId, 'kids'), (snapshot) => {
-        if(snapshot.empty && !Object.keys(kidsState).length) return;
+        if (snapshot.empty && !Object.keys(kidsState).length) return;
         const newKidsState = {};
         snapshot.forEach(doc => { newKidsState[doc.id] = doc.data(); });
-        
+
         // Merge logic
         kidsState = newKidsState;
         if (!kidsState[currentKid]) {
             const keys = Object.keys(kidsState);
-            if(keys.length > 0) currentKid = keys[0];
+            if (keys.length > 0) currentKid = keys[0];
             else currentKid = null;
         }
-        
+
         // Unlock & Cache
         isDataSynced = true;
-        saveLocalCache(); 
-        
+        saveLocalCache();
+
         renderAll();
         highlightTodayColumn();
         updateConnectionStatus('online');
@@ -388,7 +388,7 @@ function loadLocalDataOnly() {
             var data = JSON.parse(raw);
             if (data.kids) kidsState = data.kids;
             if (data.rules) rulesState = data.rules;
-        } catch (e) {}
+        } catch (e) { }
     }
 }
 
@@ -398,11 +398,11 @@ function saveLocalCache() {
 }
 
 function updateConnectionStatus(status) {
-    if(dbStatusEl) {
+    if (dbStatusEl) {
         let className = 'connection-dot ' + status;
         dbStatusEl.className = className;
-        if(status === 'online') dbStatusEl.title = "已連線";
-        else if(status === 'syncing') dbStatusEl.title = "同步中";
+        if (status === 'online') dbStatusEl.title = "已連線";
+        else if (status === 'syncing') dbStatusEl.title = "同步中";
         else dbStatusEl.title = "離線";
     }
 }
@@ -411,59 +411,59 @@ function updateConnectionStatus(status) {
 document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
 document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
 document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
-document.addEventListener('touchmove', function(event) { if (event.touches.length > 1) { event.preventDefault(); } }, { passive: false });
+document.addEventListener('touchmove', function (event) { if (event.touches.length > 1) { event.preventDefault(); } }, { passive: false });
 
 function showToast(msg) {
-  var toast = document.getElementById('toast-msg');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'toast-msg';
-    toast.style.position = 'fixed';
-    toast.style.bottom = '80px';
-    toast.style.left = '50%';
-    toast.style.transform = 'translateX(-50%)';
-    toast.style.background = 'rgba(0,0,0,0.8)';
-    toast.style.color = '#fff';
-    toast.style.padding = '10px 20px';
-    toast.style.borderRadius = '20px';
-    toast.style.zIndex = '9999';
-    toast.style.fontSize = '14px';
-    toast.style.transition = 'opacity 0.5s';
-    toast.style.opacity = '0';
-    document.body.appendChild(toast);
-  }
-  toast.textContent = msg;
-  toast.style.opacity = '1';
-  setTimeout(function() { toast.style.opacity = '0'; }, 2000);
+    var toast = document.getElementById('toast-msg');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast-msg';
+        toast.style.position = 'fixed';
+        toast.style.bottom = '80px';
+        toast.style.left = '50%';
+        toast.style.transform = 'translateX(-50%)';
+        toast.style.background = 'rgba(0,0,0,0.8)';
+        toast.style.color = '#fff';
+        toast.style.padding = '10px 20px';
+        toast.style.borderRadius = '20px';
+        toast.style.zIndex = '9999';
+        toast.style.fontSize = '14px';
+        toast.style.transition = 'opacity 0.5s';
+        toast.style.opacity = '0';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    setTimeout(function () { toast.style.opacity = '0'; }, 2000);
 }
 
 var navItems = document.querySelectorAll('.nav-item');
 var pages = document.querySelectorAll('.tab-page');
-navItems.forEach(function(item) {
-  item.addEventListener('click', function() {
-    var target = item.getAttribute('data-tab-target');
-    navItems.forEach(function(n) { n.classList.remove('active'); });
-    item.classList.add('active');
-    pages.forEach(function(page) {
-      if (page.getAttribute('data-tab') === target) page.classList.add('active');
-      else page.classList.remove('active');
+navItems.forEach(function (item) {
+    item.addEventListener('click', function () {
+        var target = item.getAttribute('data-tab-target');
+        navItems.forEach(function (n) { n.classList.remove('active'); });
+        item.classList.add('active');
+        pages.forEach(function (page) {
+            if (page.getAttribute('data-tab') === target) page.classList.add('active');
+            else page.classList.remove('active');
+        });
+        if (target === 'today') setTimeout(highlightTodayColumn, 100);
     });
-    if(target === 'today') setTimeout(highlightTodayColumn, 100);
-  });
 });
 
 function parseLocalYMD(dateStr) {
-    if(!dateStr) return new Date();
+    if (!dateStr) return new Date();
     var p = dateStr.split('-').map(Number);
-    return new Date(p[0], p[1]-1, p[2]); 
+    return new Date(p[0], p[1] - 1, p[2]);
 }
 
 function getMonday(d) {
-    d = new Date(d); 
+    d = new Date(d);
     var day = d.getDay();
     var diff = d.getDate() - day + (day == 0 ? -6 : 1);
     var monday = new Date(d.setDate(diff));
-    monday.setHours(0,0,0,0);
+    monday.setHours(0, 0, 0, 0);
     return monday;
 }
 function formatDateKey(d) {
@@ -479,51 +479,51 @@ function getWeekRangeString(mondayStr) {
     var monday = parseLocalYMD(mondayStr);
     var sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-    return (monday.getMonth()+1) + '/' + monday.getDate() + " ～ " + (sunday.getMonth()+1) + '/' + sunday.getDate();
+    return (monday.getMonth() + 1) + '/' + monday.getDate() + " ～ " + (sunday.getMonth() + 1) + '/' + sunday.getDate();
 }
 
 async function saveData(type, id) {
-  if (!currentFamilyId) return;
-  triggerSaveIndicator();
-  try {
-    if (type === 'kid' && id) {
-        const kidData = kidsState[id];
-        if(kidData) await setDoc(doc(db, 'families', currentFamilyId, 'kids', id), kidData);
-    } else if (type === 'delete_kid' && id) {
-        await deleteDoc(doc(db, 'families', currentFamilyId, 'kids', id));
-    } else if (type === 'rules') {
-        // Legacy support: still save global rules just in case
-        await setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
+    if (!currentFamilyId) return;
+    triggerSaveIndicator();
+    try {
+        if (type === 'kid' && id) {
+            const kidData = kidsState[id];
+            if (kidData) await setDoc(doc(db, 'families', currentFamilyId, 'kids', id), kidData);
+        } else if (type === 'delete_kid' && id) {
+            await deleteDoc(doc(db, 'families', currentFamilyId, 'kids', id));
+        } else if (type === 'rules') {
+            // Legacy support: still save global rules just in case
+            await setDoc(doc(db, 'families', currentFamilyId, 'settings', 'rules'), { list: rulesState });
+        }
+    } catch (e) {
+        updateConnectionStatus('offline');
     }
-  } catch(e) {
-      updateConnectionStatus('offline');
-  }
 }
 
 function triggerSaveIndicator() {
     var badge = document.getElementById('save-badge');
-    if(badge) {
+    if (badge) {
         badge.classList.add('show');
-        setTimeout(function(){ badge.classList.remove('show'); }, 1500);
+        setTimeout(function () { badge.classList.remove('show'); }, 1500);
     }
 }
 
 function calculateDailyScoreDetail(kid, weekKey, dayIndex) {
     var weekData = getWeekData(kid, weekKey);
-    if (!weekData.ruleScores) weekData.ruleScores = [0,0,0,0,0,0,0]; 
+    if (!weekData.ruleScores) weekData.ruleScores = [0, 0, 0, 0, 0, 0, 0];
     var dayStatus = weekData.status[dayIndex] || {};
-    
+
     var checkedNormalCount = 0;
     kid.tasks.forEach(t => { if (dayStatus[t.id] === 'checked') checkedNormalCount++; });
-    
+
     var ruleScore = 0;
     var maxPoints = 0;
     var matched = false;
-    
+
     // --- NEW LOGIC: Use kid's rules first, fallback to global ---
     var activeRules = kid.rules || rulesState;
-    
-    activeRules.forEach(function(rule) {
+
+    activeRules.forEach(function (rule) {
         if (checkedNormalCount >= rule.threshold) {
             if (rule.points > maxPoints) { maxPoints = rule.points; matched = true; }
         }
@@ -536,7 +536,7 @@ function calculateDailyScoreDetail(kid, weekKey, dayIndex) {
     }
 
     var manualPoints = weekData.summary[dayIndex] || 0;
-    
+
     return {
         ruleScore: ruleScore,
         bonusScore: bonusScore,
@@ -546,15 +546,15 @@ function calculateDailyScoreDetail(kid, weekKey, dayIndex) {
 }
 
 function calculateDailyTotal(kid, weekKey, dayIndex) {
-  return calculateDailyScoreDetail(kid, weekKey, dayIndex).total;
+    return calculateDailyScoreDetail(kid, weekKey, dayIndex).total;
 }
 
 function performReset() {
-  if(confirm('確定要登出並清除本機紀錄嗎？\n(您的雲端資料仍會保留在該家庭代號下)')) {
-      localStorage.removeItem(FAMILY_ID_KEY);
-      localStorage.removeItem(STORAGE_KEY);
-      window.location.reload();
-  }
+    if (confirm('確定要登出並清除本機紀錄嗎？\n(您的雲端資料仍會保留在該家庭代號下)')) {
+        localStorage.removeItem(FAMILY_ID_KEY);
+        localStorage.removeItem(STORAGE_KEY);
+        window.location.reload();
+    }
 }
 
 function getFrequentNotes(kid, limit = 5) {
@@ -577,22 +577,22 @@ function renderSmartChips() {
 }
 
 function renderChipsToContainer(notes, container, inputId) {
-    if(!container) return;
+    if (!container) return;
     container.innerHTML = '';
     notes.forEach(note => {
         var btn = document.createElement('div');
         btn.className = 'chip-btn';
         btn.textContent = note;
-        btn.onclick = function() {
+        btn.onclick = function () {
             var input = document.getElementById(inputId);
-            if(input) { input.value = note; input.focus(); }
+            if (input) { input.value = note; input.focus(); }
         };
         container.appendChild(btn);
     });
 }
 
 function renderDatalist(notes, datalist) {
-    if(!datalist) return;
+    if (!datalist) return;
     datalist.innerHTML = '';
     notes.forEach(note => { var opt = document.createElement('option'); opt.value = note; datalist.appendChild(opt); });
 }
@@ -602,9 +602,9 @@ function renderAll() {
     renderWeekTable();
     renderHistoryList();
     renderSettingsTaskList();
-    renderSettingsBonusTaskList(); 
+    renderSettingsBonusTaskList();
     renderSettingsKidList();
-    renderSettingsRulesList(); 
+    renderSettingsRulesList();
     renderSmartChips();
 }
 
@@ -616,9 +616,9 @@ var kidSubEl = document.querySelector('.kid-sub');
 var totalPointsEl = document.getElementById('total-points');
 var weeklyPointsEl = document.getElementById('weekly-points');
 var dateChipEl = document.getElementById('date-chip');
-var viewLabelEl = document.getElementById('viewing-week-label'); 
+var viewLabelEl = document.getElementById('viewing-week-label');
 var historyWeekLabel = document.getElementById('history-week-label');
-var settingsTaskKidLabel = document.getElementById('settings-task-kid-label'); 
+var settingsTaskKidLabel = document.getElementById('settings-task-kid-label');
 var settingsRulesHeaderLabel = document.getElementById('settings-rules-header-label');
 
 var redeemKidNameEl = document.getElementById('redeem-kid-name');
@@ -661,16 +661,16 @@ var btnSaveTaskEdit = document.getElementById('btn-save-task-edit');
 if (resetDataBtn) resetDataBtn.addEventListener('click', performReset);
 
 function getTodayColumnIndex() {
-  var d = new Date().getDay();
-  return (d === 0) ? 6 : d - 1; 
+    var d = new Date().getDay();
+    return (d === 0) ? 6 : d - 1;
 }
 
 function getWeekData(kid, weekKey) {
-    if(!kid.dataByWeek[weekKey]) {
+    if (!kid.dataByWeek[weekKey]) {
         kid.dataByWeek[weekKey] = {
-            status: [{},{},{},{},{},{},{}],
-            summary: [0,0,0,0,0,0,0],
-            ruleScores: [0,0,0,0,0,0,0]
+            status: [{}, {}, {}, {}, {}, {}, {}],
+            summary: [0, 0, 0, 0, 0, 0, 0],
+            ruleScores: [0, 0, 0, 0, 0, 0, 0]
         };
     }
     return kid.dataByWeek[weekKey];
@@ -686,35 +686,35 @@ function calculateWeeklyGridPoints(kid, weekKey) {
 
 function renderCurrentKid() {
     if (!kidsState[currentKid]) {
-        if(Object.keys(kidsState).length > 0) currentKid = Object.keys(kidsState)[0];
-        else return; 
+        if (Object.keys(kidsState).length > 0) currentKid = Object.keys(kidsState)[0];
+        else return;
     }
     var kid = kidsState[currentKid];
     if (!kid.bonusTasks) kid.bonusTasks = [];
 
     kidNameEl.textContent = kid.displayName;
-    if(currentFamilyId) {
-         var idTag = document.createElement('span');
-         idTag.className = 'family-id-tag';
-         idTag.textContent = currentFamilyId;
+    if (currentFamilyId) {
+        var idTag = document.createElement('span');
+        idTag.className = 'family-id-tag';
+        idTag.textContent = currentFamilyId;
     }
-    
+
     var firstChild = avatarEl.firstChild;
-    if(firstChild && firstChild.nodeType === 3) firstChild.textContent = kid.avatar;
+    if (firstChild && firstChild.nodeType === 3) firstChild.textContent = kid.avatar;
     else if (!firstChild) avatarEl.prepend(document.createTextNode(kid.avatar));
 
     kidSubEl.textContent = kid.slogan;
     appEl.classList.remove('boy', 'girl');
     appEl.classList.add(kid.theme);
-    
+
     totalPointsEl.innerHTML = '<span>⭐</span><span>' + (kid.totalPoints * 10) + ' 點</span>';
-    
+
     const weeklyScore = calculateWeeklyGridPoints(kid, currentViewWeekKey);
     weeklyPointsEl.textContent = `本週：${weeklyScore * 10} 點`;
 
     dateChipEl.textContent = '週次：' + getWeekRangeString(currentViewWeekKey);
     var thisWeek = getCurrentWeekKey();
-    if(currentViewWeekKey === thisWeek) {
+    if (currentViewWeekKey === thisWeek) {
         viewLabelEl.textContent = "(本週)";
         viewLabelEl.style.color = "#2e7d32";
         historyWeekLabel.textContent = "(本週)";
@@ -723,12 +723,12 @@ function renderCurrentKid() {
         viewLabelEl.style.color = "#c62828";
         historyWeekLabel.textContent = `(${getWeekRangeString(currentViewWeekKey)})`;
     }
-    
+
     redeemKidNameEl.textContent = kid.displayName;
     redeemKidPointsEl.textContent = kid.totalPoints * 10;
-    
-    if(settingsTaskKidLabel) settingsTaskKidLabel.textContent = "(管理對象：" + kid.displayName + ")";
-    if(settingsRulesHeaderLabel) settingsRulesHeaderLabel.textContent = "(管理對象：" + kid.displayName + ")";
+
+    if (settingsTaskKidLabel) settingsTaskKidLabel.textContent = "(管理對象：" + kid.displayName + ")";
+    if (settingsRulesHeaderLabel) settingsRulesHeaderLabel.textContent = "(管理對象：" + kid.displayName + ")";
 }
 
 function renderWeekTable() {
@@ -738,13 +738,13 @@ function renderWeekTable() {
     table.innerHTML = '';
     var weekData = getWeekData(kid, currentViewWeekKey);
 
-    var days = ['一','二','三','四','五','六','日'];
+    var days = ['一', '二', '三', '四', '五', '六', '日'];
     var todayIdx = getTodayColumnIndex();
     var isCurrentWeek = (currentViewWeekKey === getCurrentWeekKey());
 
     var headerRow = document.createElement('div');
     headerRow.className = 'week-header';
-    
+
     var corner = document.createElement('div');
     corner.className = 'task-name-header';
     corner.textContent = '任務 / 星期';
@@ -752,22 +752,22 @@ function renderWeekTable() {
 
     var mondayDate = parseLocalYMD(currentViewWeekKey);
 
-    days.forEach(function(d, i) {
+    days.forEach(function (d, i) {
         var cell = document.createElement('div');
         cell.className = 'day-header';
         if (isCurrentWeek && i === todayIdx) cell.classList.add('today-col');
         var thisDay = new Date(mondayDate);
         thisDay.setDate(mondayDate.getDate() + i);
-        var dateStr = (thisDay.getMonth()+1) + '/' + thisDay.getDate();
+        var dateStr = (thisDay.getMonth() + 1) + '/' + thisDay.getDate();
         cell.innerHTML = `<div>${d}</div><div class="date-label">${dateStr}</div>`;
         headerRow.appendChild(cell);
     });
     table.appendChild(headerRow);
 
     function getVisibleTasks(taskList) {
-        return taskList.filter(function(t) {
+        return taskList.filter(function (t) {
             if (!t.deleted) return true;
-            var hasDataInWeek = weekData.status.some(function(dayStatus) {
+            var hasDataInWeek = weekData.status.some(function (dayStatus) {
                 return dayStatus && (dayStatus[t.id] === 'checked' || dayStatus[t.id] === 'crossed');
             });
             return hasDataInWeek;
@@ -775,7 +775,7 @@ function renderWeekTable() {
     }
 
     var normalTasks = getVisibleTasks(kid.tasks);
-    normalTasks.forEach(function(task) { renderTaskRow(task, 'normal', weekData, todayIdx); });
+    normalTasks.forEach(function (task) { renderTaskRow(task, 'normal', weekData, todayIdx); });
 
     var bonusTasks = getVisibleTasks(kid.bonusTasks || []);
     if (bonusTasks.length > 0) {
@@ -785,7 +785,7 @@ function renderWeekTable() {
         table.appendChild(sep);
     }
 
-    bonusTasks.forEach(function(task) { renderTaskRow(task, 'bonus', weekData, todayIdx); });
+    bonusTasks.forEach(function (task) { renderTaskRow(task, 'bonus', weekData, todayIdx); });
 
     var sumRow = document.createElement('div');
     sumRow.className = 'day-summary-row';
@@ -794,15 +794,15 @@ function renderWeekTable() {
     sumTitle.textContent = '本日小計';
     sumRow.appendChild(sumTitle);
 
-    for (var i=0; i<7; i++) {
+    for (var i = 0; i < 7; i++) {
         var cell = document.createElement('div');
         cell.className = 'day-summary-cell';
         if (isCurrentWeek && i === todayIdx) cell.classList.add('today-col');
         var dailyTotal = calculateDailyTotal(kid, currentViewWeekKey, i);
         var scoreSpan = document.createElement('span');
         scoreSpan.textContent = (dailyTotal > 0 ? '+' : '') + dailyTotal;
-        if(dailyTotal > 0) scoreSpan.className = 'day-summary-cell-positive';
-        if(dailyTotal < 0) scoreSpan.className = 'day-summary-cell-negative';
+        if (dailyTotal > 0) scoreSpan.className = 'day-summary-cell-positive';
+        if (dailyTotal < 0) scoreSpan.className = 'day-summary-cell-negative';
         cell.appendChild(scoreSpan);
         sumRow.appendChild(cell);
     }
@@ -823,16 +823,16 @@ function renderTaskRow(task, type, weekData, todayIdx) {
     } else {
         nameCell.textContent = task.name;
         var pressTimer;
-        nameCell.addEventListener('touchstart', function(){
-            pressTimer = setTimeout(function(){
-                if(confirm(`要刪除任務「${task.name}」嗎？(歷史紀錄保留)`)) deleteTask(task.id, type);
+        nameCell.addEventListener('touchstart', function () {
+            pressTimer = setTimeout(function () {
+                if (confirm(`要刪除任務「${task.name}」嗎？(歷史紀錄保留)`)) deleteTask(task.id, type);
             }, 800);
         });
-        nameCell.addEventListener('touchend', function(){ clearTimeout(pressTimer); });
+        nameCell.addEventListener('touchend', function () { clearTimeout(pressTimer); });
     }
     row.appendChild(nameCell);
 
-    for (var i=0; i<7; i++) {
+    for (var i = 0; i < 7; i++) {
         var cellWrapper = document.createElement('div');
         cellWrapper.className = 'day-cell-wrapper';
         if (currentViewWeekKey === getCurrentWeekKey() && i === todayIdx) cellWrapper.classList.add('today-col');
@@ -840,10 +840,10 @@ function renderTaskRow(task, type, weekData, todayIdx) {
         var check = document.createElement('div');
         var status = (weekData.status[i] && weekData.status[i][task.id]) ? weekData.status[i][task.id] : '';
         check.className = 'custom-check ' + (status === 'checked' ? 'checked' : (status === 'crossed' ? 'crossed' : ''));
-        check.textContent = status === 'checked' ? '✔' : (status === 'crossed' ? '✖' : '');
-        
-        (function(dIndex, taskId, tType) {
-            check.onclick = function() { toggleCheck(dIndex, taskId, tType); };
+        check.textContent = status === 'checked' ? '✔' : (status === 'crossed' ? '⭕' : '');
+
+        (function (dIndex, taskId, tType) {
+            check.onclick = function () { toggleCheck(dIndex, taskId, tType); };
         })(i, task.id, type);
 
         cellWrapper.appendChild(check);
@@ -858,7 +858,7 @@ function toggleCheck(dayIndex, taskId, type) {
     var detailsBefore = calculateDailyScoreDetail(kid, currentViewWeekKey, dayIndex);
     var oldTotal = detailsBefore.total;
     var weekData = getWeekData(kid, currentViewWeekKey);
-    
+
     var current = (weekData.status[dayIndex] && weekData.status[dayIndex][taskId]) ? weekData.status[dayIndex][taskId] : '';
     var next = '';
     if (current === '') next = 'checked';
@@ -875,7 +875,7 @@ function toggleCheck(dayIndex, taskId, type) {
     var diff = newTotal - oldTotal;
     if (diff !== 0) {
         kid.totalPoints += diff;
-        if(diff > 0) { showCoinAnimation(); playCoinSound(); } 
+        if (diff > 0) { showCoinAnimation(); playCoinSound(); }
         else { showDeductAnimation(); playDeductSound(); }
     }
     saveData('kid', currentKid);
@@ -887,14 +887,14 @@ function handleQuickAdd(val) {
     if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
     var kid = kidsState[currentKid];
     var note = quickNoteInput.value.trim();
-    
+
     kid.totalPoints += val;
     var today = new Date();
-    var dayIdx = getTodayColumnIndex(); 
+    var dayIdx = getTodayColumnIndex();
     var thisWeekKey = getCurrentWeekKey();
     var weekData = getWeekData(kid, thisWeekKey);
-    
-    if (!weekData.summary) weekData.summary = [0,0,0,0,0,0,0];
+
+    if (!weekData.summary) weekData.summary = [0, 0, 0, 0, 0, 0, 0];
     weekData.summary[dayIdx] = (weekData.summary[dayIdx] || 0) + val;
 
     kid.history.push({
@@ -906,13 +906,13 @@ function handleQuickAdd(val) {
     });
 
     quickNoteInput.value = '';
-    if (val > 0) { showCoinAnimation(); playCoinSound(); showToast('加點成功！(已計入本日小計)'); } 
+    if (val > 0) { showCoinAnimation(); playCoinSound(); showToast('加點成功！(已計入本日小計)'); }
     else { showDeductAnimation(); playDeductSound(); showToast('已扣點 (已計入本日小計)'); }
     saveData('kid', currentKid);
     renderAll();
 }
 
-redeemConfirmBtn.addEventListener('click', function() {
+redeemConfirmBtn.addEventListener('click', function () {
     if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
     var name = redeemNameInput.value.trim();
     var pts = parseInt(redeemPointsInput.value);
@@ -920,7 +920,7 @@ redeemConfirmBtn.addEventListener('click', function() {
     var kid = kidsState[currentKid];
 
     if (!name || isNaN(pts) || pts <= 0) { alert('請輸入有效的兌換名稱和點數'); return; }
-    if (kid.totalPoints < pts) { if(!confirm('點數不足，確定要兌換並變成負分嗎？')) return; }
+    if (kid.totalPoints < pts) { if (!confirm('點數不足，確定要兌換並變成負分嗎？')) return; }
 
     kid.totalPoints -= pts;
     kid.history.push({
@@ -945,37 +945,37 @@ function renderHistoryList() {
     if (!kidsState[currentKid]) return;
     var kid = kidsState[currentKid];
     historyCard.innerHTML = '';
-    
+
     var viewMonday = parseLocalYMD(currentViewWeekKey);
     var viewNextMonday = new Date(viewMonday);
     viewNextMonday.setDate(viewMonday.getDate() + 7);
 
-    var filteredHistory = kid.history.filter(function(item) {
+    var filteredHistory = kid.history.filter(function (item) {
         // Safe Date Parsing
         var itemDate = parseLocalYMD(item.date);
-        return itemDate.getTime() >= viewMonday.getTime() && 
-               itemDate.getTime() < viewNextMonday.getTime();
+        return itemDate.getTime() >= viewMonday.getTime() &&
+            itemDate.getTime() < viewNextMonday.getTime();
     });
 
-    var list = filteredHistory.sort(function(a,b){ return b.id - a.id; });
+    var list = filteredHistory.sort(function (a, b) { return b.id - a.id; });
     if (list.length === 0) { historyCard.innerHTML = '<div class="empty-state">本週尚無額外紀錄</div>'; return; }
 
-    list.forEach(function(h) {
+    list.forEach(function (h) {
         var row = document.createElement('div');
         row.className = 'history-item';
-        
+
         var left = document.createElement('div');
         left.className = 'history-main';
         var titleDiv = document.createElement('div');
         titleDiv.style.fontWeight = '600';
         titleDiv.textContent = h.item;
-        
+
         var metaDiv = document.createElement('div');
         metaDiv.className = 'history-date';
         var metaText = h.date;
-        if(h.note) metaText += ' · ' + h.note;
+        if (h.note) metaText += ' · ' + h.note;
         metaDiv.textContent = metaText;
-        
+
         left.appendChild(titleDiv);
         left.appendChild(metaDiv);
 
@@ -985,12 +985,12 @@ function renderHistoryList() {
         deltaDiv.className = 'history-delta';
         deltaDiv.textContent = (h.delta > 0 ? '+' : '') + h.delta;
         deltaDiv.style.color = h.delta > 0 ? '#2e7d32' : '#c62828';
-        
+
         var delBtn = document.createElement('button');
         delBtn.className = 'history-delete-btn';
         delBtn.textContent = '刪除';
-        delBtn.onclick = function() {
-            if(confirm('確定刪除這條紀錄？點數會復原。')) {
+        delBtn.onclick = function () {
+            if (confirm('確定刪除這條紀錄？點數會復原。')) {
                 deleteHistoryItem(h.id, h.delta);
             }
         };
@@ -1007,11 +1007,11 @@ function deleteHistoryItem(id, delta) {
     if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
     var kid = kidsState[currentKid];
     var targetItem = kid.history.find(x => x.id === id);
-    
+
     if (targetItem && targetItem.item === '快速加扣') {
         var itemDate = parseLocalYMD(targetItem.date);
         var itemWeekKey = formatDateKey(getMonday(itemDate));
-        
+
         if (kid.dataByWeek[itemWeekKey] && kid.dataByWeek[itemWeekKey].summary) {
             var dayIdx = (itemDate.getDay() === 0) ? 6 : itemDate.getDay() - 1;
             var currentVal = kid.dataByWeek[itemWeekKey].summary[dayIdx] || 0;
@@ -1020,8 +1020,8 @@ function deleteHistoryItem(id, delta) {
     }
 
     kid.history = kid.history.filter(x => x.id !== id);
-    kid.totalPoints -= delta; 
-    
+    kid.totalPoints -= delta;
+
     saveData('kid', currentKid);
     renderAll();
     showToast('紀錄已刪除');
@@ -1034,15 +1034,15 @@ function renderGenericTaskList(container, type) {
     if (!kidsState[currentKid]) return;
     var kid = kidsState[currentKid];
     var list = (type === 'normal') ? kid.tasks : (kid.bonusTasks || []);
-    
+
     container.innerHTML = '';
-    list.forEach(function(t) {
+    list.forEach(function (t) {
         if (t.deleted) return;
         var item = document.createElement('div');
         item.className = 'settings-item';
         var nameDiv = document.createElement('div');
         nameDiv.textContent = t.name;
-        if(type === 'bonus') nameDiv.style.color = '#e65100'; 
+        if (type === 'bonus') nameDiv.style.color = '#e65100';
         item.appendChild(nameDiv);
 
         var btnDiv = document.createElement('div');
@@ -1052,13 +1052,13 @@ function renderGenericTaskList(container, type) {
         var editBtn = document.createElement('button');
         editBtn.className = 'settings-btn';
         editBtn.textContent = '編輯';
-        editBtn.onclick = function() { openEditTaskModal(t.id, t.name, type); };
+        editBtn.onclick = function () { openEditTaskModal(t.id, t.name, type); };
         btnDiv.appendChild(editBtn);
 
         var delBtn = document.createElement('button');
         delBtn.className = 'settings-btn delete-task-btn';
         delBtn.textContent = '刪除';
-        delBtn.onclick = function() { if(confirm('確定刪除「'+t.name+'」？(歷史紀錄保留)')) deleteTask(t.id, type); };
+        delBtn.onclick = function () { if (confirm('確定刪除「' + t.name + '」？(歷史紀錄保留)')) deleteTask(t.id, type); };
         btnDiv.appendChild(delBtn);
 
         item.appendChild(btnDiv);
@@ -1082,21 +1082,21 @@ function deleteTask(taskId, type) {
 function openEditTaskModal(id, name, type) {
     editTaskIdInput.value = id;
     editTaskNameInput.value = name;
-    editTaskTypeInput.value = type; 
+    editTaskTypeInput.value = type;
     editTaskModal.classList.add('open');
 }
 
-if(btnCancelTaskEdit) btnCancelTaskEdit.onclick = function() { editTaskModal.classList.remove('open'); };
-if(btnSaveTaskEdit) btnSaveTaskEdit.onclick = function() {
+if (btnCancelTaskEdit) btnCancelTaskEdit.onclick = function () { editTaskModal.classList.remove('open'); };
+if (btnSaveTaskEdit) btnSaveTaskEdit.onclick = function () {
     if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
     var id = editTaskIdInput.value;
     var type = editTaskTypeInput.value;
     var newName = editTaskNameInput.value.trim();
-    if(!newName) return;
+    if (!newName) return;
     var kid = kidsState[currentKid];
     var list = (type === 'bonus') ? kid.bonusTasks : kid.tasks;
     var task = list.find(t => t.id === id);
-    if(task) {
+    if (task) {
         task.name = newName;
         saveData('kid', currentKid);
         renderAll();
@@ -1105,26 +1105,26 @@ if(btnSaveTaskEdit) btnSaveTaskEdit.onclick = function() {
     editTaskModal.classList.remove('open');
 };
 
-settingsNewTaskBtn.addEventListener('click', function() {
+settingsNewTaskBtn.addEventListener('click', function () {
     if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
     var val = settingsNewTaskInput.value.trim();
-    if(!val) return;
+    if (!val) return;
     var kid = kidsState[currentKid];
-    kid.tasks.push({ id: 't'+Date.now(), name: val, createdAt: new Date().toISOString() });
+    kid.tasks.push({ id: 't' + Date.now(), name: val, createdAt: new Date().toISOString() });
     settingsNewTaskInput.value = '';
     saveData('kid', currentKid);
     renderAll();
     showToast('任務已新增');
 });
 
-if(settingsNewBonusTaskBtn) {
-    settingsNewBonusTaskBtn.addEventListener('click', function() {
+if (settingsNewBonusTaskBtn) {
+    settingsNewBonusTaskBtn.addEventListener('click', function () {
         if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
         var val = settingsNewBonusTaskInput.value.trim();
-        if(!val) return;
+        if (!val) return;
         var kid = kidsState[currentKid];
-        if(!kid.bonusTasks) kid.bonusTasks = [];
-        kid.bonusTasks.push({ id: 'b'+Date.now(), name: val, createdAt: new Date().toISOString() });
+        if (!kid.bonusTasks) kid.bonusTasks = [];
+        kid.bonusTasks.push({ id: 'b' + Date.now(), name: val, createdAt: new Date().toISOString() });
         settingsNewBonusTaskInput.value = '';
         saveData('kid', currentKid);
         renderAll();
@@ -1134,27 +1134,27 @@ if(settingsNewBonusTaskBtn) {
 
 function renderSettingsKidList() {
     settingsKidListEl.innerHTML = '';
-    Object.values(kidsState).forEach(function(k) {
+    Object.values(kidsState).forEach(function (k) {
         var item = document.createElement('div');
         item.className = 'settings-item';
         var infoDiv = document.createElement('div');
-        
+
         // MODIFICATION: Kid List Points Display x10
-        infoDiv.innerHTML = '<span style="font-weight:600">'+k.displayName+'</span> <span style="font-size:12px;color:#888">('+(k.totalPoints * 10)+'點)</span>';
-        
+        infoDiv.innerHTML = '<span style="font-weight:600">' + k.displayName + '</span> <span style="font-size:12px;color:#888">(' + (k.totalPoints * 10) + '點)</span>';
+
         var btnDiv = document.createElement('div');
         btnDiv.style.display = 'flex';
         btnDiv.style.gap = '8px';
         var editBtn = document.createElement('button');
         editBtn.className = 'settings-btn';
         editBtn.textContent = '編輯';
-        editBtn.onclick = function() { openEditKidModal(k.key); };
+        editBtn.onclick = function () { openEditKidModal(k.key); };
         btnDiv.appendChild(editBtn);
         if (Object.keys(kidsState).length > 1) {
             var delBtn = document.createElement('button');
             delBtn.className = 'settings-btn delete-task-btn';
             delBtn.textContent = '刪除';
-            delBtn.onclick = function() { if (confirm('確定要刪除小孩「'+k.displayName+'」的所有資料？無法復原！')) deleteKid(k.key); };
+            delBtn.onclick = function () { if (confirm('確定要刪除小孩「' + k.displayName + '」的所有資料？無法復原！')) deleteKid(k.key); };
             btnDiv.appendChild(delBtn);
         }
         item.appendChild(infoDiv);
@@ -1201,7 +1201,7 @@ function deleteKid(key) {
     delete kidsState[key];
     if (currentKid === key) {
         const keys = Object.keys(kidsState);
-        if(keys.length > 0) currentKid = keys[0];
+        if (keys.length > 0) currentKid = keys[0];
         else currentKid = null;
     }
     saveData('delete_kid', key);
@@ -1214,21 +1214,21 @@ function openEditKidModal(key) {
     editKidNameInput.value = kid.displayName;
     editKidPointsInput.value = kid.totalPoints;
     var radios = document.getElementsByName('edit-kid-theme');
-    radios.forEach(r => { if(r.value === kid.theme) r.checked = true; });
+    radios.forEach(r => { if (r.value === kid.theme) r.checked = true; });
     editKidModal.classList.add('open');
 }
 
-btnCancelEdit.onclick = function() { editKidModal.classList.remove('open'); };
-btnSaveEdit.onclick = function() {
+btnCancelEdit.onclick = function () { editKidModal.classList.remove('open'); };
+btnSaveEdit.onclick = function () {
     if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
     var key = editKidKeyInput.value;
     var kid = kidsState[key];
-    if(!kid) return;
+    if (!kid) return;
     kid.displayName = editKidNameInput.value.trim() || 'No Name';
     kid.avatar = kid.displayName.charAt(0).toUpperCase();
     kid.totalPoints = parseInt(editKidPointsInput.value) || 0;
     var radios = document.getElementsByName('edit-kid-theme');
-    radios.forEach(r => { if(r.checked) kid.theme = r.value; });
+    radios.forEach(r => { if (r.checked) kid.theme = r.value; });
     saveData('kid', key);
     renderAll();
     editKidModal.classList.remove('open');
@@ -1238,19 +1238,19 @@ btnSaveEdit.onclick = function() {
 function renderSettingsRulesList() {
     if (!kidsState[currentKid]) return;
     var kid = kidsState[currentKid];
-    
+
     // --- NEW LOGIC: Use kid rules OR global rules ---
     var activeRules = kid.rules || rulesState;
-    
+
     settingsRulesListEl.innerHTML = '';
-    
+
     // Sort active rules by threshold
-    var sortedRules = [...activeRules].sort((a,b) => b.threshold - a.threshold);
+    var sortedRules = [...activeRules].sort((a, b) => b.threshold - a.threshold);
 
     sortedRules.forEach((rule) => {
         // We need to find the original index in activeRules to delete correctly
         var originalIdx = activeRules.indexOf(rule);
-        
+
         var row = document.createElement('div');
         row.className = 'settings-item';
         row.innerHTML = `
@@ -1263,17 +1263,17 @@ function renderSettingsRulesList() {
         var delBtn = document.createElement('button');
         delBtn.className = 'settings-btn delete-task-btn';
         delBtn.textContent = '刪除';
-        delBtn.onclick = function() {
+        delBtn.onclick = function () {
             if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
-            
+
             // --- FORK LOGIC ---
             // If kid doesn't have own rules yet, copy global rules first
             if (!kid.rules) kid.rules = JSON.parse(JSON.stringify(rulesState));
-            
+
             // Find index again in the *newly created* kid.rules array
             // We use findIndex because object references might change after stringify/parse
             var idxToDelete = kid.rules.findIndex(r => r.threshold === rule.threshold && r.points === rule.points);
-            if(idxToDelete !== -1) {
+            if (idxToDelete !== -1) {
                 kid.rules.splice(idxToDelete, 1);
                 saveData('kid', currentKid); // Save KID doc, not rules doc
                 renderAll();
@@ -1285,31 +1285,31 @@ function renderSettingsRulesList() {
     });
 }
 
-btnAddRule.addEventListener('click', function() {
+btnAddRule.addEventListener('click', function () {
     if (!isDataSynced) { showToast("☁️ 資料同步中，請稍候..."); return; }
     var t = parseInt(ruleThresholdInput.value);
     var p = parseInt(rulePointsInput.value);
-    if(isNaN(t) || isNaN(p)) return;
-    
+    if (isNaN(t) || isNaN(p)) return;
+
     var kid = kidsState[currentKid];
-    
+
     // --- FORK LOGIC ---
     // Create kid.rules if missing
     if (!kid.rules) kid.rules = JSON.parse(JSON.stringify(rulesState));
-    
+
     kid.rules.push({ threshold: t, points: p });
-    
+
     ruleThresholdInput.value = '';
     rulePointsInput.value = '';
-    
+
     saveData('kid', currentKid); // Save KID doc
     renderAll();
     showToast('規則已新增');
 });
 
-switchBtn.addEventListener('click', function() {
+switchBtn.addEventListener('click', function () {
     var keys = Object.keys(kidsState);
-    if(keys.length === 0) return;
+    if (keys.length === 0) return;
     var idx = keys.indexOf(currentKid);
     var nextIdx = (idx + 1) % keys.length;
     currentKid = keys[nextIdx];
@@ -1324,12 +1324,12 @@ function openWeekSelectModal() {
     var thisWeek = getCurrentWeekKey();
     if (!weeks.includes(thisWeek)) weeks.unshift(thisWeek);
     weeks = [...new Set(weeks)].sort().reverse();
-    weeks.forEach(function(wk) {
+    weeks.forEach(function (wk) {
         var div = document.createElement('div');
         div.className = 'week-list-item ' + (wk === currentViewWeekKey ? 'active' : '');
         var label = getWeekRangeString(wk);
         if (wk === thisWeek) label += " (本週)";
-        div.onclick = function() {
+        div.onclick = function () {
             currentViewWeekKey = wk;
             closeWeekSelectModal();
             renderAll();
@@ -1343,7 +1343,7 @@ function closeWeekSelectModal() { weekSelectModal.classList.remove('open'); }
 function highlightTodayColumn() {
     setTimeout(() => {
         const todayCols = document.querySelectorAll('.today-col');
-        if(todayCols.length > 0) {
+        if (todayCols.length > 0) {
             const target = todayCols[0];
             target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         }
@@ -1351,7 +1351,7 @@ function highlightTodayColumn() {
 }
 
 window.handleQuickAdd = handleQuickAdd;
-window.handleBulkAction = handleBulkAction; 
+window.handleBulkAction = handleBulkAction;
 window.openWeekSelectModal = openWeekSelectModal;
 window.closeWeekSelectModal = closeWeekSelectModal;
 
